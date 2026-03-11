@@ -124,19 +124,14 @@ fun CropToolPanel(
             valueRange = 10f..100f
         )
 
-        Button(
-            onClick = {
-                val data = currentData()
-                if (existingData != null) {
-                    onUpdateCrop(data)
-                } else {
-                    onApplyCrop(LayerType.CROP, data)
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Text(if (existingData != null) "Update Crop" else "Apply Crop")
+        if (existingData == null) {
+            Button(
+                onClick = { onApplyCrop(LayerType.CROP, currentData()) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Text("Apply Crop")
+            }
         }
     }
 }

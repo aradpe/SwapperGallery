@@ -37,6 +37,17 @@ fun BlurToolPanel(
     var centerY by remember { mutableFloatStateOf(existingData?.centerY ?: 0.5f) }
     var radius by remember { mutableFloatStateOf(existingData?.radius ?: 0.3f) }
 
+    fun currentData() = LayerData.BlurData(
+        type = blurType, intensity = intensity,
+        centerX = centerX, centerY = centerY, radius = radius
+    )
+
+    fun onChanged() {
+        if (existingData != null) {
+            onUpdateBlur(currentData())
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -47,17 +58,17 @@ fun BlurToolPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = blurType == LayerData.BlurType.FULL,
-                onClick = { blurType = LayerData.BlurType.FULL },
+                onClick = { blurType = LayerData.BlurType.FULL; onChanged() },
                 label = { Text("Full") }
             )
             FilterChip(
                 selected = blurType == LayerData.BlurType.RADIAL,
-                onClick = { blurType = LayerData.BlurType.RADIAL },
+                onClick = { blurType = LayerData.BlurType.RADIAL; onChanged() },
                 label = { Text("Radial") }
             )
             FilterChip(
                 selected = blurType == LayerData.BlurType.LINEAR,
-                onClick = { blurType = LayerData.BlurType.LINEAR },
+                onClick = { blurType = LayerData.BlurType.LINEAR; onChanged() },
                 label = { Text("Linear") }
             )
         }
@@ -65,7 +76,7 @@ fun BlurToolPanel(
         SliderControl(
             label = "Intensity",
             value = intensity,
-            onValueChange = { intensity = it },
+            onValueChange = { intensity = it; onChanged() },
             valueRange = 1f..25f
         )
 
@@ -73,42 +84,31 @@ fun BlurToolPanel(
             SliderControl(
                 label = "Center X",
                 value = centerX * 100f,
-                onValueChange = { centerX = it / 100f },
+                onValueChange = { centerX = it / 100f; onChanged() },
                 valueRange = 0f..100f
             )
             SliderControl(
                 label = "Center Y",
                 value = centerY * 100f,
-                onValueChange = { centerY = it / 100f },
+                onValueChange = { centerY = it / 100f; onChanged() },
                 valueRange = 0f..100f
             )
             SliderControl(
                 label = "Clear Radius",
                 value = radius * 100f,
-                onValueChange = { radius = it / 100f },
+                onValueChange = { radius = it / 100f; onChanged() },
                 valueRange = 5f..80f
             )
         }
 
-        Button(
-            onClick = {
-                val data = LayerData.BlurData(
-                    type = blurType,
-                    intensity = intensity,
-                    centerX = centerX,
-                    centerY = centerY,
-                    radius = radius
-                )
-                if (existingData != null) {
-                    onUpdateBlur(data)
-                } else {
-                    onApplyBlur(LayerType.BLUR, data)
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Text(if (existingData != null) "Update Blur" else "Apply Blur")
+        if (existingData == null) {
+            Button(
+                onClick = { onApplyBlur(LayerType.BLUR, currentData()) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Text("Apply Blur")
+            }
         }
     }
 }

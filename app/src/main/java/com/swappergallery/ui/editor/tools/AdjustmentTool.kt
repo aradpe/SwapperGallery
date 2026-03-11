@@ -72,21 +72,16 @@ fun AdjustmentToolPanel(
         SliderControl(label = "Shadows", value = shadows, onValueChange = { shadows = it; onSliderChanged() })
         SliderControl(label = "Vignette", value = vignette, onValueChange = { vignette = it; onSliderChanged() }, valueRange = 0f..100f)
 
-        Button(
-            onClick = {
-                val data = currentData()
-                if (existingData != null) {
-                    onUpdateAdjustment(data)
-                } else {
-                    onApplyAdjustment(LayerType.ADJUSTMENT, data)
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Text(if (existingData != null) "Update Adjustment" else "Apply Adjustment")
+        if (existingData == null) {
+            Button(
+                onClick = { onApplyAdjustment(LayerType.ADJUSTMENT, currentData()) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Text("Apply Adjustment")
+            }
         }
     }
 }
