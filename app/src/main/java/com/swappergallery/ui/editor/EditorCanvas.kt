@@ -129,19 +129,29 @@ fun EditorCanvas(
                     )
                 }
             }
-        EditorTool.NONE -> Modifier.pointerInput(Unit) {
-            detectTransformGestures { _, pan, zoom, _ ->
-                scale = (scale * zoom).coerceIn(0.5f, 5f)
-                if (scale > 1f) {
-                    offsetX += pan.x
-                    offsetY += pan.y
-                } else {
-                    offsetX = 0f
-                    offsetY = 0f
+        EditorTool.NONE -> Modifier
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    scale = (scale * zoom).coerceIn(0.5f, 5f)
+                    if (scale > 1f) {
+                        offsetX += pan.x
+                        offsetY += pan.y
+                    } else {
+                        offsetX = 0f
+                        offsetY = 0f
+                    }
                 }
             }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    onLayerTap(offset.x / canvasWidth, offset.y / canvasHeight)
+                }
+            }
+        else -> Modifier.pointerInput(Unit) {
+            detectTapGestures { offset ->
+                onLayerTap(offset.x / canvasWidth, offset.y / canvasHeight)
+            }
         }
-        else -> Modifier
     }
 
     Canvas(
