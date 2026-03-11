@@ -65,6 +65,8 @@ object ImageCompositor {
             }
         } catch (_: Exception) {
             // Return whatever we have so far if something fails
+        } catch (_: OutOfMemoryError) {
+            // Return whatever we have so far if OOM
         }
 
         return current

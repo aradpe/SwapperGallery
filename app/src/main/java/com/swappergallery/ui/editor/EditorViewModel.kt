@@ -404,6 +404,8 @@ class EditorViewModel @Inject constructor(
                     ImageCompositor.composite(original, state.layers)
                 } catch (_: Exception) {
                     null
+                } catch (_: OutOfMemoryError) {
+                    null
                 }
             }
             if (preview != null) {
