@@ -2,6 +2,11 @@ package com.swappergallery.ui.editor
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -37,7 +42,7 @@ fun EditorCanvas(
     drawState: DrawToolState,
     hasSelectedLayer: Boolean,
     onDrawingComplete: (List<LayerData.DrawPath>) -> Unit,
-    onLayerDrag: (deltaX: Float, deltaY: Float) -> Unit,
+    onLayerTransform: (panX: Float, panY: Float, zoomDelta: Float, rotationDelta: Float) -> Unit,
     onLayerDragEnd: () -> Unit,
     onLayerTap: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
@@ -91,25 +96,30 @@ fun EditorCanvas(
                 }
             )
         }
-        // Text & Sticker: drag to move selected layer, tap to place
+        // Text & Sticker: drag to move, pinch to resize/rotate, tap to select/place
         EditorTool.TEXT, EditorTool.STICKER -> Modifier
             .pointerInput(hasSelectedLayer) {
-                detectDragGestures(
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        if (hasSelectedLayer) {
-                            onLayerDrag(
-                                dragAmount.x / canvasWidth,
-                                dragAmount.y / canvasHeight
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val pan = event.calculatePan()
+                        val zoom = event.calculateZoom()
+                        val rotation = event.calculateRotation()
+                        if (hasSelectedLayer && (pan != Offset.Zero || zoom != 1f || rotation != 0f)) {
+                            onLayerTransform(
+                                pan.x / canvasWidth,
+                                pan.y / canvasHeight,
+                                zoom,
+                                rotation
                             )
                         }
-                    },
-                    onDragEnd = {
-                        if (hasSelectedLayer) {
-                            onLayerDragEnd()
-                        }
+                        event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                    if (hasSelectedLayer) {
+                        onLayerDragEnd()
                     }
-                )
+                }
             }
             .pointerInput(hasSelectedLayer) {
                 detectTapGestures { offset ->

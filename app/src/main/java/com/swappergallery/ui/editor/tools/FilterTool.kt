@@ -28,7 +28,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.swappergallery.data.model.LayerData
-import com.swappergallery.data.model.LayerType
 import com.swappergallery.ui.editor.components.SliderControl
 
 data class FilterPreset(
@@ -56,7 +55,6 @@ val filterPresets = listOf(
 @Composable
 fun FilterToolPanel(
     existingData: LayerData.FilterData? = null,
-    onApplyFilter: (LayerType, LayerData) -> Unit,
     onUpdateFilter: (LayerData) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -84,21 +82,13 @@ fun FilterToolPanel(
                     onClick = {
                         selectedFilter = preset.name
                         if (preset.name == "none") {
-                            // Reset to identity filter so editing existing clears it
-                            if (existingData != null) {
-                                onUpdateFilter(LayerData.FilterData(filterName = "none", intensity = 0f))
-                            }
+                            onUpdateFilter(LayerData.FilterData(filterName = "none", intensity = 0f))
                             return@FilterPresetItem
                         }
-                        val data = LayerData.FilterData(
+                        onUpdateFilter(LayerData.FilterData(
                             filterName = preset.name,
                             intensity = intensity
-                        )
-                        if (existingData != null) {
-                            onUpdateFilter(data)
-                        } else {
-                            onApplyFilter(LayerType.FILTER, data)
-                        }
+                        ))
                     }
                 )
             }
@@ -110,9 +100,7 @@ fun FilterToolPanel(
                 value = intensity * 100f,
                 onValueChange = {
                     intensity = it / 100f
-                    if (existingData != null) {
-                        onUpdateFilter(LayerData.FilterData(filterName = selectedFilter, intensity = intensity))
-                    }
+                    onUpdateFilter(LayerData.FilterData(filterName = selectedFilter, intensity = intensity))
                 },
                 valueRange = 0f..100f
             )

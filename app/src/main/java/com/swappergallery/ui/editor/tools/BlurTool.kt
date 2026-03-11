@@ -5,11 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,13 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.swappergallery.data.model.LayerData
-import com.swappergallery.data.model.LayerType
 import com.swappergallery.ui.editor.components.SliderControl
 
 @Composable
 fun BlurToolPanel(
     existingData: LayerData.BlurData? = null,
-    onApplyBlur: (LayerType, LayerData) -> Unit,
     onUpdateBlur: (LayerData) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -101,14 +95,5 @@ fun BlurToolPanel(
             )
         }
 
-        if (existingData == null) {
-            Button(
-                onClick = { onApplyBlur(LayerType.BLUR, currentData()) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Check, contentDescription = null)
-                Text("Apply Blur")
-            }
-        }
     }
 }

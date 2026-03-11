@@ -6,10 +6,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,13 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.swappergallery.data.model.LayerData
-import com.swappergallery.data.model.LayerType
 import com.swappergallery.ui.editor.components.SliderControl
 
 @Composable
 fun AdjustmentToolPanel(
     existingData: LayerData.AdjustmentData? = null,
-    onApplyAdjustment: (LayerType, LayerData) -> Unit,
     onUpdateAdjustment: (LayerData) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -72,16 +66,5 @@ fun AdjustmentToolPanel(
         SliderControl(label = "Shadows", value = shadows, onValueChange = { shadows = it; onSliderChanged() })
         SliderControl(label = "Vignette", value = vignette, onValueChange = { vignette = it; onSliderChanged() }, valueRange = 0f..100f)
 
-        if (existingData == null) {
-            Button(
-                onClick = { onApplyAdjustment(LayerType.ADJUSTMENT, currentData()) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            ) {
-                Icon(Icons.Default.Check, contentDescription = null)
-                Text("Apply Adjustment")
-            }
-        }
     }
 }

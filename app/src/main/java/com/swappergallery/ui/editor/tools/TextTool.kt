@@ -10,10 +10,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,14 +30,12 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.swappergallery.data.model.LayerData
-import com.swappergallery.data.model.LayerType
 import com.swappergallery.ui.editor.components.ColorPicker
 import com.swappergallery.ui.editor.components.SliderControl
 
 @Composable
 fun TextToolPanel(
     existingData: LayerData.TextData? = null,
-    onAddText: (LayerType, LayerData) -> Unit,
     onUpdateText: (LayerData) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -141,19 +137,5 @@ fun TextToolPanel(
             valueRange = 0f..20f
         )
 
-        if (existingData == null) {
-            Button(
-                onClick = {
-                    if (text.isNotBlank()) {
-                        onAddText(LayerType.TEXT, currentData())
-                        keyboardController?.hide()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Text("Add Text")
-            }
-        }
     }
 }

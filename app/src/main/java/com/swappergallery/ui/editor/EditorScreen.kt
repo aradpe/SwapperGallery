@@ -8,8 +8,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.CircularProgressIndicator
@@ -229,22 +232,14 @@ fun EditorScreen(
                             )
                         }
                     },
-                    onLayerDrag = { dx, dy ->
-                        viewModel.dragSelectedLayer(dx, dy)
+                    onLayerTransform = { panX, panY, zoom, rotation ->
+                        viewModel.transformSelectedLayer(panX, panY, zoom, rotation)
                     },
                     onLayerDragEnd = {
                         viewModel.commitDrag()
                     },
                     onLayerTap = { x, y ->
-                        val selectedId = uiState.selectedLayerId
-                        if (selectedId != null) {
-                            val data = viewModel.getLayerData(selectedId)
-                            when (data) {
-                                is LayerData.TextData -> viewModel.updateLayerData(selectedId, data.copy(x = x, y = y))
-                                is LayerData.StickerData -> viewModel.updateLayerData(selectedId, data.copy(x = x, y = y))
-                                else -> {}
-                            }
-                        }
+                        viewModel.handleCanvasTap(x, y)
                     }
                 )
             }
@@ -263,21 +258,42 @@ fun EditorScreen(
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it }
             ) {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 350.dp)
                         .background(EditorBackground)
                 ) {
+                    // Done header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = uiState.activeTool.name.lowercase()
+                                .replaceFirstChar { it.uppercase() },
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        IconButton(onClick = { viewModel.dismissTool() }) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = "Done",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
                     val selectedLayerData = uiState.selectedLayerId?.let { viewModel.getLayerData(it) }
 
                     when (uiState.activeTool) {
                         EditorTool.TEXT -> {
                             TextToolPanel(
                                 existingData = selectedLayerData as? LayerData.TextData,
-                                onAddText = { type, data ->
-                                    viewModel.addLayer(type, data)
-                                },
                                 onUpdateText = { data ->
                                     uiState.selectedLayerId?.let { viewModel.updateLayerData(it, data) }
                                 }
@@ -286,18 +302,12 @@ fun EditorScreen(
                         EditorTool.DRAW -> {
                             DrawToolPanel(
                                 drawState = drawState,
-                                onStateChange = { drawState = it },
-                                onFinishDrawing = {
-                                    viewModel.selectTool(EditorTool.NONE)
-                                }
+                                onStateChange = { drawState = it }
                             )
                         }
                         EditorTool.CROP -> {
                             CropToolPanel(
                                 existingData = selectedLayerData as? LayerData.CropData,
-                                onApplyCrop = { type, data ->
-                                    viewModel.addLayer(type, data)
-                                },
                                 onUpdateCrop = { data ->
                                     uiState.selectedLayerId?.let { viewModel.updateLayerData(it, data) }
                                 }
@@ -306,9 +316,6 @@ fun EditorScreen(
                         EditorTool.FILTER -> {
                             FilterToolPanel(
                                 existingData = selectedLayerData as? LayerData.FilterData,
-                                onApplyFilter = { type, data ->
-                                    viewModel.addLayer(type, data)
-                                },
                                 onUpdateFilter = { data ->
                                     uiState.selectedLayerId?.let { viewModel.updateLayerData(it, data) }
                                 }
@@ -317,9 +324,6 @@ fun EditorScreen(
                         EditorTool.ADJUST -> {
                             AdjustmentToolPanel(
                                 existingData = selectedLayerData as? LayerData.AdjustmentData,
-                                onApplyAdjustment = { type, data ->
-                                    viewModel.addLayer(type, data)
-                                },
                                 onUpdateAdjustment = { data ->
                                     uiState.selectedLayerId?.let { viewModel.updateLayerData(it, data) }
                                 }
@@ -335,9 +339,6 @@ fun EditorScreen(
                         EditorTool.BLUR -> {
                             BlurToolPanel(
                                 existingData = selectedLayerData as? LayerData.BlurData,
-                                onApplyBlur = { type, data ->
-                                    viewModel.addLayer(type, data)
-                                },
                                 onUpdateBlur = { data ->
                                     uiState.selectedLayerId?.let { viewModel.updateLayerData(it, data) }
                                 }

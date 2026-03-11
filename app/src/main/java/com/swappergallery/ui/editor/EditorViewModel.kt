@@ -115,9 +115,46 @@ class EditorViewModel @Inject constructor(
     }
 
     fun selectTool(tool: EditorTool) {
+        val newTool = if (_uiState.value.activeTool == tool) EditorTool.NONE else tool
+        _uiState.value = _uiState.value.copy(activeTool = newTool)
+        if (newTool != EditorTool.NONE) {
+            ensureLayerForTool(newTool)
+        }
+    }
+
+    fun dismissTool() {
         _uiState.value = _uiState.value.copy(
-            activeTool = if (_uiState.value.activeTool == tool) EditorTool.NONE else tool
+            activeTool = EditorTool.NONE,
+            selectedLayerId = null
         )
+    }
+
+    private fun ensureLayerForTool(tool: EditorTool) {
+        if (_uiState.value.selectedLayerId != null) return
+        val project = _uiState.value.project ?: return
+
+        val triple: Triple<LayerType, LayerData, String> = when (tool) {
+            EditorTool.CROP -> Triple(LayerType.CROP, LayerData.CropData(), "Crop")
+            EditorTool.ADJUST -> Triple(LayerType.ADJUSTMENT, LayerData.AdjustmentData(), "Adjustment")
+            EditorTool.BLUR -> Triple(LayerType.BLUR, LayerData.BlurData(intensity = 10f), "Blur")
+            EditorTool.TEXT -> Triple(LayerType.TEXT, LayerData.TextData(text = "Text"), "Text")
+            EditorTool.FILTER -> Triple(LayerType.FILTER, LayerData.FilterData(filterName = "none", intensity = 0f), "Filter")
+            else -> return // DRAW, STICKER, NONE don't need auto-creation
+        }
+
+        val (type, data, name) = triple
+        saveUndoState("Add ${type.name.lowercase()}")
+
+        viewModelScope.launch {
+            val layer = editRepository.addLayer(project.id, type, data, name)
+            val layers = editRepository.getLayersForProject(project.id)
+            _uiState.value = _uiState.value.copy(
+                layers = layers,
+                selectedLayerId = layer.id,
+                hasUnsavedChanges = true
+            )
+            updatePreview()
+        }
     }
 
     fun selectLayer(layerId: Long?) {
@@ -366,6 +403,36 @@ class EditorViewModel @Inject constructor(
         updatePreview()
     }
 
+    fun transformSelectedLayer(panX: Float, panY: Float, zoomDelta: Float, rotationDelta: Float) {
+        val selectedId = _uiState.value.selectedLayerId ?: return
+        val data = getLayerData(selectedId) ?: return
+
+        val updated = when (data) {
+            is LayerData.TextData -> data.copy(
+                x = (data.x + panX).coerceIn(0f, 1f),
+                y = (data.y + panY).coerceIn(0f, 1f),
+                scale = (data.scale * zoomDelta).coerceIn(0.1f, 10f),
+                rotation = data.rotation + rotationDelta
+            )
+            is LayerData.StickerData -> data.copy(
+                x = (data.x + panX).coerceIn(0f, 1f),
+                y = (data.y + panY).coerceIn(0f, 1f),
+                scale = (data.scale * zoomDelta).coerceIn(0.1f, 10f),
+                rotation = data.rotation + rotationDelta
+            )
+            else -> return
+        }
+
+        val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
+        val updatedLayer = layer.copy(data = editRepository.serializeLayerData(updated))
+        val updatedLayers = _uiState.value.layers.map { if (it.id == selectedId) updatedLayer else it }
+        _uiState.value = _uiState.value.copy(
+            layers = updatedLayers,
+            hasUnsavedChanges = true
+        )
+        updatePreview()
+    }
+
     fun commitDrag() {
         // Persist the drag result to Room
         val selectedId = _uiState.value.selectedLayerId ?: return
@@ -374,6 +441,57 @@ class EditorViewModel @Inject constructor(
         viewModelScope.launch {
             editRepository.updateLayer(layer)
         }
+    }
+
+    // -- Canvas tap / element cycling --
+
+    private var lastTapLayers: List<Long> = emptyList()
+    private var lastTapCycleIndex: Int = 0
+
+    fun handleCanvasTap(normalizedX: Float, normalizedY: Float) {
+        val hitRadius = 0.08f
+        val hitLayers = _uiState.value.layers.filter { layer ->
+            if (!layer.visible) return@filter false
+            val data = editRepository.deserializeLayerData(layer)
+            when (data) {
+                is LayerData.TextData -> {
+                    val dx = data.x - normalizedX
+                    val dy = data.y - normalizedY
+                    kotlin.math.sqrt((dx * dx + dy * dy).toDouble()) < hitRadius * kotlin.math.max(data.scale, 1f)
+                }
+                is LayerData.StickerData -> {
+                    val dx = data.x - normalizedX
+                    val dy = data.y - normalizedY
+                    kotlin.math.sqrt((dx * dx + dy * dy).toDouble()) < hitRadius * kotlin.math.max(data.scale, 1f)
+                }
+                else -> false
+            }
+        }
+
+        if (hitLayers.isEmpty()) {
+            // Tapped empty space: move selected element to tap position
+            val selectedId = _uiState.value.selectedLayerId
+            if (selectedId != null) {
+                val data = getLayerData(selectedId)
+                when (data) {
+                    is LayerData.TextData -> updateLayerData(selectedId, data.copy(x = normalizedX, y = normalizedY))
+                    is LayerData.StickerData -> updateLayerData(selectedId, data.copy(x = normalizedX, y = normalizedY))
+                    else -> {}
+                }
+            }
+            lastTapLayers = emptyList()
+            lastTapCycleIndex = 0
+            return
+        }
+
+        val hitLayerIds = hitLayers.map { it.id }
+        if (hitLayerIds == lastTapLayers) {
+            lastTapCycleIndex = (lastTapCycleIndex + 1) % hitLayerIds.size
+        } else {
+            lastTapLayers = hitLayerIds
+            lastTapCycleIndex = 0
+        }
+        selectLayer(hitLayerIds[lastTapCycleIndex])
     }
 
     // -- Helpers --

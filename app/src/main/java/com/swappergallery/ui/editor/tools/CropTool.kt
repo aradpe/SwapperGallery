@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.RotateRight
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.swappergallery.data.model.LayerData
-import com.swappergallery.data.model.LayerType
 import com.swappergallery.ui.editor.components.SliderControl
 
 enum class AspectRatio(val label: String, val ratio: Float?) {
@@ -39,7 +36,6 @@ enum class AspectRatio(val label: String, val ratio: Float?) {
 @Composable
 fun CropToolPanel(
     existingData: LayerData.CropData? = null,
-    onApplyCrop: (LayerType, LayerData) -> Unit,
     onUpdateCrop: (LayerData) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -124,14 +120,5 @@ fun CropToolPanel(
             valueRange = 10f..100f
         )
 
-        if (existingData == null) {
-            Button(
-                onClick = { onApplyCrop(LayerType.CROP, currentData()) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Check, contentDescription = null)
-                Text("Apply Crop")
-            }
-        }
     }
 }

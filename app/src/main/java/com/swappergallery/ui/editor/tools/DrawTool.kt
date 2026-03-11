@@ -5,11 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,7 +30,6 @@ data class DrawToolState(
 fun DrawToolPanel(
     drawState: DrawToolState,
     onStateChange: (DrawToolState) -> Unit,
-    onFinishDrawing: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -77,13 +72,5 @@ fun DrawToolPanel(
             onValueChange = { onStateChange(drawState.copy(opacity = it / 100f)) },
             valueRange = 10f..100f
         )
-
-        Button(
-            onClick = onFinishDrawing,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Text("Done Drawing")
-        }
     }
 }
