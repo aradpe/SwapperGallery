@@ -207,6 +207,7 @@ fun EditorScreen(
                     onLayerClick = { viewModel.selectLayer(it) },
                     onToggleVisibility = { viewModel.toggleLayerVisibility(it) },
                     onDeleteLayer = { viewModel.deleteLayer(it) },
+                    onRenameLayer = { id, name -> viewModel.renameLayer(id, name) },
                     modifier = Modifier.heightIn(max = 200.dp)
                 )
             }

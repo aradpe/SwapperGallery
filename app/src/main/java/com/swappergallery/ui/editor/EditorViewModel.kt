@@ -494,6 +494,16 @@ class EditorViewModel @Inject constructor(
         selectLayer(hitLayerIds[lastTapCycleIndex])
     }
 
+    fun renameLayer(layerId: Long, newName: String) {
+        val layer = _uiState.value.layers.find { it.id == layerId } ?: return
+        val updatedLayer = layer.copy(name = newName, updatedAt = System.currentTimeMillis())
+        val updatedLayers = _uiState.value.layers.map { if (it.id == layerId) updatedLayer else it }
+        _uiState.value = _uiState.value.copy(layers = updatedLayers)
+        viewModelScope.launch {
+            editRepository.updateLayer(updatedLayer)
+        }
+    }
+
     // -- Helpers --
 
     fun getLayerData(layerId: Long): LayerData? {
