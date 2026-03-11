@@ -1,7 +1,6 @@
 package com.swappergallery.util
 
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorMatrix
@@ -28,6 +27,7 @@ object ImageCompositor {
 
     fun composite(original: Bitmap, layers: List<EditLayer>): Bitmap {
         var current = original.copy(Bitmap.Config.ARGB_8888, true)
+            ?: return original // copy() can return null on low memory
 
         try {
             // First pass: apply crop if present
@@ -63,10 +63,9 @@ object ImageCompositor {
                     else -> { /* Already applied */ }
                 }
             }
-        } catch (_: Exception) {
-            // Return whatever we have so far if something fails
-        } catch (_: OutOfMemoryError) {
-            // Return whatever we have so far if OOM
+        } catch (_: Throwable) {
+            // Catch everything — Exception, OutOfMemoryError, StackOverflowError, etc.
+            // Return whatever we have so far
         }
 
         return current
@@ -176,7 +175,7 @@ object ImageCompositor {
 
         // Sharpness (unsharp mask)
         if (adj.sharpness > 0f) {
-            val blurred = stackBlur(result.copy(Bitmap.Config.ARGB_8888, true), 1)
+            val blurred = simpleBlur(result, 2f)
             val amount = adj.sharpness / 50f
             val pixels = IntArray(result.width * result.height)
             val blurPixels = IntArray(result.width * result.height)
@@ -386,56 +385,50 @@ object ImageCompositor {
     }
 
     private fun applyBlur(bitmap: Bitmap, blur: LayerData.BlurData): Bitmap {
-        val radius = blur.intensity.coerceIn(1f, 25f)
         return try {
-            when (blur.type) {
-                LayerData.BlurType.FULL -> scaledBlur(bitmap, radius.toInt())
+            when (blur.blurType) {
+                LayerData.BlurType.FULL -> simpleBlur(bitmap, blur.intensity)
                 LayerData.BlurType.RADIAL -> applyRadialBlur(bitmap, blur)
-                LayerData.BlurType.LINEAR -> scaledBlur(bitmap, radius.toInt())
+                LayerData.BlurType.LINEAR -> simpleBlur(bitmap, blur.intensity)
             }
-        } catch (_: OutOfMemoryError) {
-            bitmap // Return original if OOM
+        } catch (_: Throwable) {
+            bitmap // Return original if anything goes wrong
         }
     }
 
     /**
-     * Blur by downscaling, blurring at low res, then upscaling back.
-     * Much faster and uses far less memory than pixel-level processing.
+     * Memory-safe blur using downscale → upscale with bilinear filtering.
+     * No IntArray allocations, no pixel-level processing — just two Bitmap.createScaledBitmap calls.
+     * intensity: 1..25 (1 = slight blur, 25 = heavy blur)
      */
-    private fun scaledBlur(bitmap: Bitmap, radius: Int): Bitmap {
-        if (radius <= 0) return bitmap
+    private fun simpleBlur(bitmap: Bitmap, intensity: Float): Bitmap {
+        val clamped = intensity.coerceIn(1f, 25f)
+        // Map intensity to a downscale factor: 1→0.5, 25→0.04
+        val scale = (1f / (clamped * 0.4f + 1f)).coerceIn(0.02f, 0.5f)
+        val smallW = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val smallH = (bitmap.height * scale).toInt().coerceAtLeast(1)
 
-        // Downscale factor — process at ~500px max dimension
-        val maxDim = maxOf(bitmap.width, bitmap.height)
-        val scaleFactor = if (maxDim > 500) 500f / maxDim else 1f
-        val smallW = (bitmap.width * scaleFactor).toInt().coerceAtLeast(1)
-        val smallH = (bitmap.height * scaleFactor).toInt().coerceAtLeast(1)
-
-        // Downscale → blur at low res → upscale
+        // Downscale (loses detail) → upscale with bilinear filtering = blur
         val small = Bitmap.createScaledBitmap(bitmap, smallW, smallH, true)
-        // Scale radius proportionally (min 1)
-        val scaledRadius = (radius * scaleFactor).toInt().coerceIn(1, 25)
-        val blurredSmall = stackBlur(small, scaledRadius)
-        val result = Bitmap.createScaledBitmap(blurredSmall, bitmap.width, bitmap.height, true)
-
-        if (small !== bitmap) small.recycle()
-        if (blurredSmall !== small) blurredSmall.recycle()
+        val result = Bitmap.createScaledBitmap(small, bitmap.width, bitmap.height, true)
+        if (small !== bitmap && small !== result) small.recycle()
         return result
     }
 
     private fun applyRadialBlur(bitmap: Bitmap, blur: LayerData.BlurData): Bitmap {
-        val blurred = scaledBlur(bitmap, blur.intensity.toInt().coerceIn(1, 25))
+        val blurred = simpleBlur(bitmap, blur.intensity)
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            ?: return bitmap // copy() can return null
         val canvas = Canvas(result)
 
         val cx = blur.centerX * bitmap.width
         val cy = blur.centerY * bitmap.height
-        val r = blur.radius * maxOf(bitmap.width, bitmap.height)
+        val r = (blur.radius * maxOf(bitmap.width, bitmap.height)).coerceAtLeast(1f)
 
         // Draw blurred as base
         canvas.drawBitmap(blurred, 0f, 0f, null)
 
-        // Draw original with radial gradient mask on top (sharp center, blurred edges)
+        // Create mask: white center (keep original), transparent edges (keep blur)
         val maskBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
         val maskCanvas = Canvas(maskBitmap)
         val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -448,72 +441,19 @@ object ImageCompositor {
         maskCanvas.drawRect(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat(), maskPaint)
 
         // Composite original through the mask
-        val srcPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        srcPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
         val origLayer = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val origCanvas = Canvas(origLayer)
-        origCanvas.drawBitmap(maskBitmap, 0f, 0f, srcPaint)
-
-        // Draw masked original on top of blurred
-        canvas.drawBitmap(origLayer, 0f, 0f, Paint())
+        if (origLayer != null) {
+            val srcPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            srcPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            val origCanvas = Canvas(origLayer)
+            origCanvas.drawBitmap(maskBitmap, 0f, 0f, srcPaint)
+            canvas.drawBitmap(origLayer, 0f, 0f, Paint())
+            origLayer.recycle()
+        }
 
         maskBitmap.recycle()
-        origLayer.recycle()
-        blurred.recycle()
+        if (blurred !== bitmap) blurred.recycle()
         return result
-    }
-
-    /**
-     * Simple box blur implementation for API 26+ (no RenderScript needed).
-     * Only used on downscaled images so memory usage is minimal.
-     */
-    private fun stackBlur(bitmap: Bitmap, radius: Int): Bitmap {
-        if (radius <= 0) return bitmap
-        val r = radius.coerceAtMost(25)
-
-        val w = bitmap.width
-        val h = bitmap.height
-        val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-
-        val result = IntArray(w * h)
-
-        // Horizontal pass
-        for (y in 0 until h) {
-            for (x in 0 until w) {
-                var rSum = 0; var gSum = 0; var bSum = 0; var count = 0
-                for (i in -r..r) {
-                    val px = (x + i).coerceIn(0, w - 1)
-                    val color = pixels[y * w + px]
-                    rSum += Color.red(color)
-                    gSum += Color.green(color)
-                    bSum += Color.blue(color)
-                    count++
-                }
-                result[y * w + x] = Color.argb(255, rSum / count, gSum / count, bSum / count)
-            }
-        }
-
-        // Vertical pass
-        val finalPixels = IntArray(w * h)
-        for (x in 0 until w) {
-            for (y in 0 until h) {
-                var rSum = 0; var gSum = 0; var bSum = 0; var count = 0
-                for (i in -r..r) {
-                    val py = (y + i).coerceIn(0, h - 1)
-                    val color = result[py * w + x]
-                    rSum += Color.red(color)
-                    gSum += Color.green(color)
-                    bSum += Color.blue(color)
-                    count++
-                }
-                finalPixels[y * w + x] = Color.argb(255, rSum / count, gSum / count, bSum / count)
-            }
-        }
-
-        val output = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        output.setPixels(finalPixels, 0, w, 0, 0, w, h)
-        return output
     }
 
     private fun drawDrawing(canvas: Canvas, width: Int, height: Int, drawing: LayerData.DrawingData) {

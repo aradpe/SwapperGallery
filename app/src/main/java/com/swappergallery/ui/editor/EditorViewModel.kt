@@ -171,14 +171,20 @@ class EditorViewModel @Inject constructor(
         saveUndoState("Add ${type.name.lowercase()}")
 
         viewModelScope.launch {
-            val layer = editRepository.addLayer(project.id, type, data, name)
-            val layers = editRepository.getLayersForProject(project.id)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                selectedLayerId = layer.id,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
+            try {
+                val layer = editRepository.addLayer(project.id, type, data, name)
+                val layers = editRepository.getLayersForProject(project.id)
+                _uiState.value = _uiState.value.copy(
+                    layers = layers,
+                    selectedLayerId = layer.id,
+                    hasUnsavedChanges = true
+                )
+                updatePreview()
+            } catch (e: Throwable) {
+                _uiState.value = _uiState.value.copy(
+                    saveError = "Could not create layer: ${e.message}"
+                )
+            }
         }
     }
 
@@ -402,9 +408,7 @@ class EditorViewModel @Inject constructor(
                 try {
                     // originalBitmap is already capped at 2048px from loadImage()
                     ImageCompositor.composite(original, state.layers)
-                } catch (_: Exception) {
-                    null
-                } catch (_: OutOfMemoryError) {
+                } catch (_: Throwable) {
                     null
                 }
             }

@@ -25,14 +25,14 @@ fun BlurToolPanel(
     onUpdateBlur: (LayerData) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var blurType by remember { mutableStateOf(existingData?.type ?: LayerData.BlurType.FULL) }
+    var blurType by remember { mutableStateOf(existingData?.blurType ?: LayerData.BlurType.FULL) }
     var intensity by remember { mutableFloatStateOf(existingData?.intensity ?: 10f) }
     var centerX by remember { mutableFloatStateOf(existingData?.centerX ?: 0.5f) }
     var centerY by remember { mutableFloatStateOf(existingData?.centerY ?: 0.5f) }
     var radius by remember { mutableFloatStateOf(existingData?.radius ?: 0.3f) }
 
     fun currentData() = LayerData.BlurData(
-        type = blurType, intensity = intensity,
+        blurType = blurType, intensity = intensity,
         centerX = centerX, centerY = centerY, radius = radius
     )
 

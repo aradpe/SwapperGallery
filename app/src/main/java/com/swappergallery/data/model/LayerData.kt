@@ -90,7 +90,7 @@ sealed class LayerData {
     @Serializable
     @SerialName("blur")
     data class BlurData(
-        val type: BlurType = BlurType.FULL,
+        val blurType: BlurType = BlurType.FULL,
         val intensity: Float = 25f,      // Blur radius
         val centerX: Float = 0.5f,       // For radial blur
         val centerY: Float = 0.5f,
