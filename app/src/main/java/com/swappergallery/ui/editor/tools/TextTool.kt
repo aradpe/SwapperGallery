@@ -63,7 +63,12 @@ fun TextToolPanel(
                 italic = italic,
                 rotation = rotation,
                 outlineWidth = outlineWidth,
-                outlineColor = outlineColor
+                outlineColor = outlineColor,
+                x = existingData?.x ?: 0.5f,
+                y = existingData?.y ?: 0.5f,
+                scale = existingData?.scale ?: 1f,
+                backgroundColor = existingData?.backgroundColor ?: 0x00000000,
+                fontFamily = existingData?.fontFamily ?: "sans-serif"
             )
             if (existingData != null) {
                 onUpdateText(data)
