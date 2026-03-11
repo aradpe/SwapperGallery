@@ -23,11 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,15 +53,6 @@ fun ViewerScreen(
     }
 
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    // Increment each time viewer is resumed (e.g. after editor) to bust Coil cache
-    var imageVersion by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            imageVersion++
-        }
-    }
 
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -124,8 +111,8 @@ fun ViewerScreen(
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(Uri.parse(imageUri))
-                    .memoryCacheKey("${imageUri}_v${imageVersion}")
-                    .diskCacheKey("${imageUri}_v${imageVersion}")
+                    .memoryCachePolicy(CachePolicy.DISABLED)
+                    .diskCachePolicy(CachePolicy.DISABLED)
                     .build(),
                 contentDescription = "Photo",
                 modifier = Modifier
