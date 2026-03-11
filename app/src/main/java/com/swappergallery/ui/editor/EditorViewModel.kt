@@ -71,45 +71,55 @@ class EditorViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(imageUri = uri, isLoading = true)
 
-            // Check for existing project
-            val existingProject = editRepository.getProjectByUri(uri)
+            try {
+                // Check for existing project
+                val existingProject = editRepository.getProjectByUri(uri)
 
-            if (existingProject != null && backupManager.hasBackup(existingProject.backupFileName)) {
-                // Load from backup + layers
-                val original = backupManager.loadBackup(existingProject.backupFileName)
-                val layers = editRepository.getLayersForProject(existingProject.id)
-
-                _uiState.value = _uiState.value.copy(
-                    originalBitmap = original,
-                    project = existingProject,
-                    layers = layers,
-                    isLoading = false
-                )
-                updatePreview()
-            } else {
-                // First time editing - create backup
-                val imageUri = Uri.parse(uri)
-                val original = backupManager.loadBitmapFromUri(imageUri)
-
-                if (original != null) {
-                    val backup = backupManager.createBackup(imageUri)
-                    val project = editRepository.getOrCreateProject(
-                        imageUri = uri,
-                        backupFileName = backup.fileName,
-                        width = backup.width,
-                        height = backup.height
-                    )
+                if (existingProject != null && backupManager.hasBackup(existingProject.backupFileName)) {
+                    // Load from backup + layers
+                    val original = backupManager.loadBackup(existingProject.backupFileName)
+                    val layers = editRepository.getLayersForProject(existingProject.id)
 
                     _uiState.value = _uiState.value.copy(
                         originalBitmap = original,
-                        project = project,
-                        layers = emptyList(),
+                        project = existingProject,
+                        layers = layers,
                         isLoading = false
                     )
                     updatePreview()
                 } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    // First time editing - create backup
+                    val imageUri = Uri.parse(uri)
+                    val original = backupManager.loadBitmapFromUri(imageUri)
+
+                    if (original != null) {
+                        val backup = backupManager.createBackup(imageUri)
+                        val project = editRepository.getOrCreateProject(
+                            imageUri = uri,
+                            backupFileName = backup.fileName,
+                            width = backup.width,
+                            height = backup.height
+                        )
+
+                        _uiState.value = _uiState.value.copy(
+                            originalBitmap = original,
+                            project = project,
+                            layers = emptyList(),
+                            isLoading = false
+                        )
+                        updatePreview()
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            saveError = "Could not load image. Please check app permissions."
+                        )
+                    }
                 }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    saveError = "Error loading image: ${e.message}"
+                )
             }
         }
     }

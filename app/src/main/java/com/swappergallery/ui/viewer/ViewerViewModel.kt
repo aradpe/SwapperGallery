@@ -29,11 +29,15 @@ class ViewerViewModel @Inject constructor(
     fun loadImage(uri: String) {
         _uiState.value = _uiState.value.copy(imageUri = uri)
         viewModelScope.launch {
-            val project = editRepository.getProjectByUri(uri)
-            _uiState.value = _uiState.value.copy(
-                hasEditProject = project != null,
-                projectId = project?.id
-            )
+            try {
+                val project = editRepository.getProjectByUri(uri)
+                _uiState.value = _uiState.value.copy(
+                    hasEditProject = project != null,
+                    projectId = project?.id
+                )
+            } catch (_: Exception) {
+                // Database might not be ready yet, ignore
+            }
         }
     }
 }

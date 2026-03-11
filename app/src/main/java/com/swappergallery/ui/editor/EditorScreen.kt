@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.CircularProgressIndicator
@@ -279,12 +280,26 @@ fun EditorScreen(
                             color = Color.White,
                             style = MaterialTheme.typography.titleSmall
                         )
-                        IconButton(onClick = { viewModel.dismissTool() }) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = "Done",
-                                tint = Color.White
-                            )
+                        Row {
+                            if (uiState.selectedLayerId != null) {
+                                IconButton(onClick = {
+                                    uiState.selectedLayerId?.let { viewModel.deleteLayer(it) }
+                                    viewModel.dismissTool()
+                                }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color.Red.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { viewModel.dismissTool() }) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Done",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
