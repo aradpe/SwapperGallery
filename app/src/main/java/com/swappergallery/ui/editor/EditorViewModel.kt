@@ -167,7 +167,6 @@ class EditorViewModel @Inject constructor(
     }
 
     private fun toolToLayerType(tool: EditorTool): LayerType? = when (tool) {
-        EditorTool.TEXT -> LayerType.TEXT
         EditorTool.CROP -> LayerType.CROP
         EditorTool.FILTER -> LayerType.FILTER
         EditorTool.ADJUST -> LayerType.ADJUSTMENT

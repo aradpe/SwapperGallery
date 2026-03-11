@@ -463,6 +463,11 @@ object ImageCompositor {
     }
 
     private fun drawDrawing(canvas: Canvas, width: Int, height: Int, drawing: LayerData.DrawingData) {
+        // Draw onto a separate transparent bitmap so eraser only erases drawing strokes,
+        // not the photo underneath.
+        val drawBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val drawCanvas = Canvas(drawBitmap)
+
         for (drawPath in drawing.paths) {
             if (drawPath.points.size < 2) continue
 
@@ -487,8 +492,11 @@ object ImageCompositor {
                 path.lineTo(pt.x * width, pt.y * height)
             }
 
-            canvas.drawPath(path, paint)
+            drawCanvas.drawPath(path, paint)
         }
+
+        canvas.drawBitmap(drawBitmap, 0f, 0f, null)
+        drawBitmap.recycle()
     }
 
     private fun drawText(canvas: Canvas, width: Int, height: Int, text: LayerData.TextData) {
@@ -515,37 +523,49 @@ object ImageCompositor {
         canvas.save()
         canvas.rotate(text.rotation, x, y)
 
+        val lines = text.text.split("\n")
+        val lineHeight = paint.fontMetrics.let { it.descent - it.ascent + it.leading }
+
         // Draw background if set
         if (text.backgroundColor != 0x00000000L) {
             val bgPaint = Paint().apply {
                 color = text.backgroundColor.toInt()
             }
-            val bounds = android.graphics.Rect()
-            paint.getTextBounds(text.text, 0, text.text.length, bounds)
+            var maxWidth = 0f
+            for (line in lines) {
+                val w = paint.measureText(line)
+                if (w > maxWidth) maxWidth = w
+            }
+            val totalHeight = lineHeight * lines.size
             val padding = 16f
             canvas.drawRoundRect(
                 RectF(
-                    x + bounds.left - padding,
-                    y + bounds.top - padding,
-                    x + bounds.right + padding,
-                    y + bounds.bottom + padding
+                    x - maxWidth / 2 - padding,
+                    y + paint.fontMetrics.ascent - padding,
+                    x + maxWidth / 2 + padding,
+                    y + paint.fontMetrics.ascent + totalHeight + padding
                 ),
                 8f, 8f, bgPaint
             )
         }
 
-        // Draw outline if set
-        if (text.outlineWidth > 0f) {
-            val outlinePaint = Paint(paint).apply {
-                color = text.outlineColor.toInt()
-                style = Paint.Style.STROKE
-                strokeWidth = text.outlineWidth
-            }
-            canvas.drawText(text.text, x, y, outlinePaint)
-        }
+        // Draw each line
+        for ((i, line) in lines.withIndex()) {
+            val ly = y + i * lineHeight
 
-        // Draw text
-        canvas.drawText(text.text, x, y, paint)
+            // Draw outline if set
+            if (text.outlineWidth > 0f) {
+                val outlinePaint = Paint(paint).apply {
+                    color = text.outlineColor.toInt()
+                    style = Paint.Style.STROKE
+                    strokeWidth = text.outlineWidth
+                }
+                canvas.drawText(line, x, ly, outlinePaint)
+            }
+
+            // Draw text
+            canvas.drawText(line, x, ly, paint)
+        }
 
         canvas.restore()
     }

@@ -196,9 +196,14 @@ fun EditorCanvas(
                 val pt = pathWithStyle.points[i]
                 path.lineTo(pt.x * size.width, pt.y * size.height)
             }
+            val pathColor = if (pathWithStyle.isEraser) {
+                Color.White.copy(alpha = 0.5f)
+            } else {
+                Color(pathWithStyle.color.toInt()).copy(alpha = pathWithStyle.alpha)
+            }
             drawPath(
                 path = path,
-                color = Color(pathWithStyle.color.toInt()).copy(alpha = pathWithStyle.alpha),
+                color = pathColor,
                 style = Stroke(
                     width = pathWithStyle.strokeWidth,
                     cap = StrokeCap.Round,
@@ -216,9 +221,14 @@ fun EditorCanvas(
                 val pt = currentPath[i]
                 path.lineTo(pt.x * size.width, pt.y * size.height)
             }
+            val currentColor = if (drawState.isEraser) {
+                Color.White.copy(alpha = 0.5f)
+            } else {
+                Color(drawState.color.toInt()).copy(alpha = drawState.opacity)
+            }
             drawPath(
                 path = path,
-                color = Color(drawState.color.toInt()).copy(alpha = drawState.opacity),
+                color = currentColor,
                 style = Stroke(
                     width = drawState.strokeWidth,
                     cap = StrokeCap.Round,

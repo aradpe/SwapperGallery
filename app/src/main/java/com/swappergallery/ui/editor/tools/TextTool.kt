@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FormatBold
@@ -18,20 +16,21 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.swappergallery.data.model.LayerData
 import com.swappergallery.ui.editor.components.ColorPicker
 import com.swappergallery.ui.editor.components.SliderControl
+import kotlinx.coroutines.delay
 
 @Composable
 fun TextToolPanel(
@@ -47,7 +46,14 @@ fun TextToolPanel(
     var rotation by remember { mutableFloatStateOf(existingData?.rotation ?: 0f) }
     var outlineWidth by remember { mutableFloatStateOf(existingData?.outlineWidth ?: 0f) }
     var outlineColor by remember { mutableStateOf(existingData?.outlineColor ?: 0xFF000000) }
-    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Counter to debounce text input — incremented on each text change
+    var textChangeCounter by remember { mutableIntStateOf(0) }
+
+    // Sync rotation from external changes (e.g. canvas gesture)
+    LaunchedEffect(existingData?.rotation) {
+        existingData?.rotation?.let { rotation = it }
+    }
 
     fun currentData() = LayerData.TextData(
         text = text,
@@ -55,7 +61,7 @@ fun TextToolPanel(
         fontSize = fontSize,
         bold = bold,
         italic = italic,
-        rotation = rotation,
+        rotation = existingData?.rotation ?: rotation,
         outlineWidth = outlineWidth,
         outlineColor = outlineColor,
         x = existingData?.x ?: 0.5f,
@@ -65,10 +71,16 @@ fun TextToolPanel(
         fontFamily = existingData?.fontFamily ?: "sans-serif"
     )
 
+    // Immediate update for non-text changes (color, size, bold, etc.)
     fun onChanged() {
-        if (text.isNotBlank()) {
-            onUpdateText(currentData())
-        }
+        onUpdateText(currentData())
+    }
+
+    // Debounced update for text input
+    LaunchedEffect(textChangeCounter) {
+        if (textChangeCounter == 0) return@LaunchedEffect
+        delay(300)
+        onUpdateText(currentData())
     }
 
     Column(
@@ -80,11 +92,11 @@ fun TextToolPanel(
     ) {
         OutlinedTextField(
             value = text,
-            onValueChange = { text = it; onChanged() },
+            onValueChange = { text = it; textChangeCounter++ },
             label = { Text("Enter text") },
             modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+            minLines = 1,
+            maxLines = 5,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
