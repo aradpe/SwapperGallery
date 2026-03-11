@@ -137,6 +137,12 @@ fun GalleryScreen(
                             text = { Text("Albums") },
                             icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) }
                         )
+                        Tab(
+                            selected = uiState.currentTab == GalleryTab.EDITED,
+                            onClick = { viewModel.selectTab(GalleryTab.EDITED) },
+                            text = { Text("Edited") },
+                            icon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                        )
                     }
                 }
 
@@ -153,6 +159,16 @@ fun GalleryScreen(
                         AlbumGrid(
                             albums = uiState.albums,
                             onAlbumClick = { viewModel.selectAlbum(it.id) }
+                        )
+                    }
+                    uiState.currentTab == GalleryTab.EDITED -> {
+                        val editedPhotos = uiState.photos.filter {
+                            uiState.editedUris.contains(it.uri.toString())
+                        }
+                        PhotoGrid(
+                            photos = editedPhotos,
+                            editedUris = uiState.editedUris,
+                            onPhotoClick = { onImageClick(it.uri) }
                         )
                     }
                     else -> {

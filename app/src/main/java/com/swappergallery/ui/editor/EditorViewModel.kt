@@ -150,9 +150,29 @@ class EditorViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(activeTool = newTool)
             return
         }
-        // Need to create a layer — set activeTool together with selectedLayerId
-        // so the tool panel only shows when the layer is ready
+        // Check if there's an existing layer of this type to re-edit
+        val targetType = toolToLayerType(newTool)
+        if (targetType != null) {
+            val existing = _uiState.value.layers.lastOrNull { it.type == targetType }
+            if (existing != null) {
+                _uiState.value = _uiState.value.copy(
+                    activeTool = newTool,
+                    selectedLayerId = existing.id
+                )
+                return
+            }
+        }
+        // No existing layer — create one
         ensureLayerForTool(newTool)
+    }
+
+    private fun toolToLayerType(tool: EditorTool): LayerType? = when (tool) {
+        EditorTool.TEXT -> LayerType.TEXT
+        EditorTool.CROP -> LayerType.CROP
+        EditorTool.FILTER -> LayerType.FILTER
+        EditorTool.ADJUST -> LayerType.ADJUSTMENT
+        EditorTool.BLUR -> LayerType.BLUR
+        else -> null
     }
 
     fun dismissTool() {

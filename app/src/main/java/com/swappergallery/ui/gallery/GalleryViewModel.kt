@@ -23,7 +23,7 @@ data class GalleryUiState(
     val currentTab: GalleryTab = GalleryTab.PHOTOS
 )
 
-enum class GalleryTab { PHOTOS, ALBUMS }
+enum class GalleryTab { PHOTOS, ALBUMS, EDITED }
 
 @HiltViewModel
 class GalleryViewModel @Inject constructor(

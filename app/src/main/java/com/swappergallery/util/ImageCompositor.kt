@@ -29,8 +29,11 @@ object ImageCompositor {
         var current = original.copy(Bitmap.Config.ARGB_8888, true)
             ?: return original // copy() can return null on low memory
 
+        // Each pass has its own try-catch so a failing filter/blur
+        // doesn't prevent drawings/stickers from rendering.
+
+        // First pass: apply crop if present
         try {
-            // First pass: apply crop if present
             val cropLayer = layers.firstOrNull { it.type == LayerType.CROP && it.visible }
             if (cropLayer != null) {
                 val cropData = json.decodeFromString<LayerData>(cropLayer.data) as? LayerData.CropData
@@ -38,10 +41,12 @@ object ImageCompositor {
                     current = applyCrop(current, cropData)
                 }
             }
+        } catch (_: Throwable) { /* skip crop on error */ }
 
-            // Second pass: apply adjustments and filters
-            for (layer in layers.sortedBy { it.orderIndex }) {
-                if (!layer.visible) continue
+        // Second pass: apply adjustments, filters, blur (each layer individually)
+        for (layer in layers.sortedBy { it.orderIndex }) {
+            if (!layer.visible) continue
+            try {
                 val data = json.decodeFromString<LayerData>(layer.data)
                 current = when (layer.type) {
                     LayerType.ADJUSTMENT -> applyAdjustment(current, data as LayerData.AdjustmentData)
@@ -49,24 +54,25 @@ object ImageCompositor {
                     LayerType.BLUR -> applyBlur(current, data as LayerData.BlurData)
                     else -> current
                 }
-            }
+            } catch (_: Throwable) { /* skip this layer on error, continue with next */ }
+        }
 
-            // Third pass: draw overlays (drawing, text, stickers)
+        // Third pass: draw overlays (drawing, text, stickers)
+        try {
             val canvas = Canvas(current)
             for (layer in layers.sortedBy { it.orderIndex }) {
                 if (!layer.visible) continue
-                val data = json.decodeFromString<LayerData>(layer.data)
-                when (layer.type) {
-                    LayerType.DRAWING -> drawDrawing(canvas, current.width, current.height, data as LayerData.DrawingData)
-                    LayerType.TEXT -> drawText(canvas, current.width, current.height, data as LayerData.TextData)
-                    LayerType.STICKER -> drawSticker(canvas, current.width, current.height, data as LayerData.StickerData)
-                    else -> { /* Already applied */ }
-                }
+                try {
+                    val data = json.decodeFromString<LayerData>(layer.data)
+                    when (layer.type) {
+                        LayerType.DRAWING -> drawDrawing(canvas, current.width, current.height, data as LayerData.DrawingData)
+                        LayerType.TEXT -> drawText(canvas, current.width, current.height, data as LayerData.TextData)
+                        LayerType.STICKER -> drawSticker(canvas, current.width, current.height, data as LayerData.StickerData)
+                        else -> { /* Already applied */ }
+                    }
+                } catch (_: Throwable) { /* skip this overlay on error */ }
             }
-        } catch (_: Throwable) {
-            // Catch everything — Exception, OutOfMemoryError, StackOverflowError, etc.
-            // Return whatever we have so far
-        }
+        } catch (_: Throwable) { /* canvas creation failed */ }
 
         return current
     }
