@@ -53,29 +53,25 @@ fun TextToolPanel(
     var outlineColor by remember { mutableStateOf(existingData?.outlineColor ?: 0xFF000000) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    fun submitText() {
-        if (text.isNotBlank()) {
-            val data = LayerData.TextData(
-                text = text,
-                color = color,
-                fontSize = fontSize,
-                bold = bold,
-                italic = italic,
-                rotation = rotation,
-                outlineWidth = outlineWidth,
-                outlineColor = outlineColor,
-                x = existingData?.x ?: 0.5f,
-                y = existingData?.y ?: 0.5f,
-                scale = existingData?.scale ?: 1f,
-                backgroundColor = existingData?.backgroundColor ?: 0x00000000,
-                fontFamily = existingData?.fontFamily ?: "sans-serif"
-            )
-            if (existingData != null) {
-                onUpdateText(data)
-            } else {
-                onAddText(LayerType.TEXT, data)
-            }
-            keyboardController?.hide()
+    fun currentData() = LayerData.TextData(
+        text = text,
+        color = color,
+        fontSize = fontSize,
+        bold = bold,
+        italic = italic,
+        rotation = rotation,
+        outlineWidth = outlineWidth,
+        outlineColor = outlineColor,
+        x = existingData?.x ?: 0.5f,
+        y = existingData?.y ?: 0.5f,
+        scale = existingData?.scale ?: 1f,
+        backgroundColor = existingData?.backgroundColor ?: 0x00000000,
+        fontFamily = existingData?.fontFamily ?: "sans-serif"
+    )
+
+    fun onChanged() {
+        if (existingData != null && text.isNotBlank()) {
+            onUpdateText(currentData())
         }
     }
 
@@ -88,11 +84,11 @@ fun TextToolPanel(
     ) {
         OutlinedTextField(
             value = text,
-            onValueChange = { text = it },
+            onValueChange = { text = it; onChanged() },
             label = { Text("Enter text") },
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submitText() }),
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
@@ -105,14 +101,14 @@ fun TextToolPanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconToggleButton(checked = bold, onCheckedChange = { bold = it }) {
+            IconToggleButton(checked = bold, onCheckedChange = { bold = it; onChanged() }) {
                 Icon(
                     Icons.Default.FormatBold,
                     contentDescription = "Bold",
                     tint = if (bold) Color.White else Color.White.copy(alpha = 0.4f)
                 )
             }
-            IconToggleButton(checked = italic, onCheckedChange = { italic = it }) {
+            IconToggleButton(checked = italic, onCheckedChange = { italic = it; onChanged() }) {
                 Icon(
                     Icons.Default.FormatItalic,
                     contentDescription = "Italic",
@@ -122,35 +118,42 @@ fun TextToolPanel(
         }
 
         Text("Color", color = Color.White.copy(alpha = 0.7f))
-        ColorPicker(selectedColor = color, onColorSelected = { color = it })
+        ColorPicker(selectedColor = color, onColorSelected = { color = it; onChanged() })
 
         SliderControl(
             label = "Font Size",
             value = fontSize,
-            onValueChange = { fontSize = it },
+            onValueChange = { fontSize = it; onChanged() },
             valueRange = 12f..200f
         )
 
         SliderControl(
             label = "Rotation",
             value = rotation,
-            onValueChange = { rotation = it },
+            onValueChange = { rotation = it; onChanged() },
             valueRange = -180f..180f
         )
 
         SliderControl(
             label = "Outline",
             value = outlineWidth,
-            onValueChange = { outlineWidth = it },
+            onValueChange = { outlineWidth = it; onChanged() },
             valueRange = 0f..20f
         )
 
-        Button(
-            onClick = { submitText() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Add, contentDescription = null)
-            Text(if (existingData != null) "Update Text" else "Add Text")
+        if (existingData == null) {
+            Button(
+                onClick = {
+                    if (text.isNotBlank()) {
+                        onAddText(LayerType.TEXT, currentData())
+                        keyboardController?.hide()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Text("Add Text")
+            }
         }
     }
 }
