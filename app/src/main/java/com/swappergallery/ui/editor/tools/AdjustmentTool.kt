@@ -38,6 +38,24 @@ fun AdjustmentToolPanel(
     var shadows by remember { mutableFloatStateOf(existingData?.shadows ?: 0f) }
     var vignette by remember { mutableFloatStateOf(existingData?.vignette ?: 0f) }
 
+    fun currentData() = LayerData.AdjustmentData(
+        brightness = brightness,
+        contrast = contrast,
+        saturation = saturation,
+        warmth = warmth,
+        sharpness = sharpness,
+        highlights = highlights,
+        shadows = shadows,
+        vignette = vignette
+    )
+
+    // When editing existing layer, push updates on slider change for real-time preview
+    fun onSliderChanged() {
+        if (existingData != null) {
+            onUpdateAdjustment(currentData())
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -45,27 +63,18 @@ fun AdjustmentToolPanel(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        SliderControl(label = "Brightness", value = brightness, onValueChange = { brightness = it })
-        SliderControl(label = "Contrast", value = contrast, onValueChange = { contrast = it })
-        SliderControl(label = "Saturation", value = saturation, onValueChange = { saturation = it })
-        SliderControl(label = "Warmth", value = warmth, onValueChange = { warmth = it })
-        SliderControl(label = "Sharpness", value = sharpness, onValueChange = { sharpness = it }, valueRange = 0f..100f)
-        SliderControl(label = "Highlights", value = highlights, onValueChange = { highlights = it })
-        SliderControl(label = "Shadows", value = shadows, onValueChange = { shadows = it })
-        SliderControl(label = "Vignette", value = vignette, onValueChange = { vignette = it }, valueRange = 0f..100f)
+        SliderControl(label = "Brightness", value = brightness, onValueChange = { brightness = it; onSliderChanged() })
+        SliderControl(label = "Contrast", value = contrast, onValueChange = { contrast = it; onSliderChanged() })
+        SliderControl(label = "Saturation", value = saturation, onValueChange = { saturation = it; onSliderChanged() })
+        SliderControl(label = "Warmth", value = warmth, onValueChange = { warmth = it; onSliderChanged() })
+        SliderControl(label = "Sharpness", value = sharpness, onValueChange = { sharpness = it; onSliderChanged() }, valueRange = 0f..100f)
+        SliderControl(label = "Highlights", value = highlights, onValueChange = { highlights = it; onSliderChanged() })
+        SliderControl(label = "Shadows", value = shadows, onValueChange = { shadows = it; onSliderChanged() })
+        SliderControl(label = "Vignette", value = vignette, onValueChange = { vignette = it; onSliderChanged() }, valueRange = 0f..100f)
 
         Button(
             onClick = {
-                val data = LayerData.AdjustmentData(
-                    brightness = brightness,
-                    contrast = contrast,
-                    saturation = saturation,
-                    warmth = warmth,
-                    sharpness = sharpness,
-                    highlights = highlights,
-                    shadows = shadows,
-                    vignette = vignette
-                )
+                val data = currentData()
                 if (existingData != null) {
                     onUpdateAdjustment(data)
                 } else {

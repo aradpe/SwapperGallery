@@ -143,6 +143,50 @@ object ImageCompositor {
         paint.colorFilter = ColorMatrixColorFilter(cm)
         canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
+        // Highlights / Shadows (selective tonal adjustment)
+        if (adj.highlights != 0f || adj.shadows != 0f) {
+            val pixels = IntArray(result.width * result.height)
+            result.getPixels(pixels, 0, result.width, 0, 0, result.width, result.height)
+            val sAdj = adj.shadows / 100f
+            val hAdj = adj.highlights / 100f
+            for (i in pixels.indices) {
+                val px = pixels[i]
+                var r = Color.red(px); var g = Color.green(px); var b = Color.blue(px)
+                val lum = (0.299f * r + 0.587f * g + 0.114f * b) / 255f
+                if (sAdj != 0f) {
+                    val w = (1f - lum) * (1f - lum)
+                    val d = (sAdj * w * 80f).toInt()
+                    r = (r + d).coerceIn(0, 255); g = (g + d).coerceIn(0, 255); b = (b + d).coerceIn(0, 255)
+                }
+                if (hAdj != 0f) {
+                    val w = lum * lum
+                    val d = (hAdj * w * 80f).toInt()
+                    r = (r + d).coerceIn(0, 255); g = (g + d).coerceIn(0, 255); b = (b + d).coerceIn(0, 255)
+                }
+                pixels[i] = Color.argb(Color.alpha(px), r, g, b)
+            }
+            result.setPixels(pixels, 0, result.width, 0, 0, result.width, result.height)
+        }
+
+        // Sharpness (unsharp mask)
+        if (adj.sharpness > 0f) {
+            val blurred = stackBlur(result.copy(Bitmap.Config.ARGB_8888, true), 1)
+            val amount = adj.sharpness / 50f
+            val pixels = IntArray(result.width * result.height)
+            val blurPixels = IntArray(result.width * result.height)
+            result.getPixels(pixels, 0, result.width, 0, 0, result.width, result.height)
+            blurred.getPixels(blurPixels, 0, result.width, 0, 0, result.width, result.height)
+            for (i in pixels.indices) {
+                val o = pixels[i]; val bl = blurPixels[i]
+                val r = (Color.red(o) + amount * (Color.red(o) - Color.red(bl))).toInt().coerceIn(0, 255)
+                val g = (Color.green(o) + amount * (Color.green(o) - Color.green(bl))).toInt().coerceIn(0, 255)
+                val b = (Color.blue(o) + amount * (Color.blue(o) - Color.blue(bl))).toInt().coerceIn(0, 255)
+                pixels[i] = Color.argb(Color.alpha(o), r, g, b)
+            }
+            result.setPixels(pixels, 0, result.width, 0, 0, result.width, result.height)
+            blurred.recycle()
+        }
+
         // Vignette
         if (adj.vignette > 0f) {
             applyVignette(canvas, result.width, result.height, adj.vignette / 100f)
@@ -159,8 +203,12 @@ object ImageCompositor {
 
         val gradient = RadialGradient(
             cx, cy, radius,
-            intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Color.argb((intensity * 255).toInt(), 0, 0, 0)),
-            floatArrayOf(0f, 0.5f, 1f),
+            intArrayOf(
+                Color.TRANSPARENT,
+                Color.argb((intensity * 80).toInt(), 0, 0, 0),
+                Color.argb((intensity * 255).toInt(), 0, 0, 0)
+            ),
+            floatArrayOf(0.3f, 0.7f, 1f),
             Shader.TileMode.CLAMP
         )
         paint.shader = gradient

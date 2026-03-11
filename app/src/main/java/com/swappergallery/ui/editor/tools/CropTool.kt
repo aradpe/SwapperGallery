@@ -50,6 +50,16 @@ fun CropToolPanel(
     var right by remember { mutableFloatStateOf(existingData?.right ?: 1f) }
     var bottom by remember { mutableFloatStateOf(existingData?.bottom ?: 1f) }
 
+    fun currentData() = LayerData.CropData(
+        left = left, top = top, right = right, bottom = bottom, rotation = rotation
+    )
+
+    fun onChanged() {
+        if (existingData != null) {
+            onUpdateCrop(currentData())
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -73,7 +83,7 @@ fun CropToolPanel(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(onClick = { rotation = (rotation + 90f) % 360f }) {
+            IconButton(onClick = { rotation = (rotation + 90f) % 360f; onChanged() }) {
                 Icon(Icons.Default.RotateRight, contentDescription = "Rotate 90°", tint = Color.White)
             }
             Text(
@@ -85,44 +95,38 @@ fun CropToolPanel(
         SliderControl(
             label = "Fine Rotation",
             value = rotation,
-            onValueChange = { rotation = it },
+            onValueChange = { rotation = it; onChanged() },
             valueRange = 0f..360f
         )
 
         SliderControl(
             label = "Left",
             value = left * 100f,
-            onValueChange = { left = (it / 100f).coerceIn(0f, right - 0.1f) },
+            onValueChange = { left = (it / 100f).coerceIn(0f, right - 0.1f); onChanged() },
             valueRange = 0f..90f
         )
         SliderControl(
             label = "Top",
             value = top * 100f,
-            onValueChange = { top = (it / 100f).coerceIn(0f, bottom - 0.1f) },
+            onValueChange = { top = (it / 100f).coerceIn(0f, bottom - 0.1f); onChanged() },
             valueRange = 0f..90f
         )
         SliderControl(
             label = "Right",
             value = right * 100f,
-            onValueChange = { right = (it / 100f).coerceIn(left + 0.1f, 1f) },
+            onValueChange = { right = (it / 100f).coerceIn(left + 0.1f, 1f); onChanged() },
             valueRange = 10f..100f
         )
         SliderControl(
             label = "Bottom",
             value = bottom * 100f,
-            onValueChange = { bottom = (it / 100f).coerceIn(top + 0.1f, 1f) },
+            onValueChange = { bottom = (it / 100f).coerceIn(top + 0.1f, 1f); onChanged() },
             valueRange = 10f..100f
         )
 
         Button(
             onClick = {
-                val data = LayerData.CropData(
-                    left = left,
-                    top = top,
-                    right = right,
-                    bottom = bottom,
-                    rotation = rotation
-                )
+                val data = currentData()
                 if (existingData != null) {
                     onUpdateCrop(data)
                 } else {

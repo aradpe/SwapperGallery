@@ -83,7 +83,13 @@ fun FilterToolPanel(
                     isSelected = selectedFilter == preset.name,
                     onClick = {
                         selectedFilter = preset.name
-                        if (preset.name == "none") return@FilterPresetItem
+                        if (preset.name == "none") {
+                            // Reset to identity filter so editing existing clears it
+                            if (existingData != null) {
+                                onUpdateFilter(LayerData.FilterData(filterName = "none", intensity = 0f))
+                            }
+                            return@FilterPresetItem
+                        }
                         val data = LayerData.FilterData(
                             filterName = preset.name,
                             intensity = intensity
@@ -104,12 +110,8 @@ fun FilterToolPanel(
                 value = intensity * 100f,
                 onValueChange = {
                     intensity = it / 100f
-                    val data = LayerData.FilterData(
-                        filterName = selectedFilter,
-                        intensity = intensity
-                    )
                     if (existingData != null) {
-                        onUpdateFilter(data)
+                        onUpdateFilter(LayerData.FilterData(filterName = selectedFilter, intensity = intensity))
                     }
                 },
                 valueRange = 0f..100f
