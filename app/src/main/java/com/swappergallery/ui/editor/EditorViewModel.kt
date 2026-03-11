@@ -69,6 +69,19 @@ class EditorViewModel @Inject constructor(
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
 
+    /** Downscale a bitmap if it exceeds maxDim on its longest side. */
+    private fun downscaleIfNeeded(bitmap: Bitmap, maxDim: Int): Bitmap {
+        val longest = maxOf(bitmap.width, bitmap.height)
+        if (longest <= maxDim) return bitmap
+        val scale = maxDim.toFloat() / longest
+        return Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+    }
+
     fun loadImage(uri: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(imageUri = uri, isLoading = true)
@@ -83,14 +96,14 @@ class EditorViewModel @Inject constructor(
                     val layers = editRepository.getLayersForProject(existingProject.id)
 
                     _uiState.value = _uiState.value.copy(
-                        originalBitmap = original,
+                        originalBitmap = original?.let { downscaleIfNeeded(it, 2048) },
                         project = existingProject,
                         layers = layers,
                         isLoading = false
                     )
                     updatePreview()
                 } else {
-                    // First time editing - create backup
+                    // First time editing - create backup at full res, keep working copy downscaled
                     val imageUri = Uri.parse(uri)
                     val original = backupManager.loadBitmapFromUri(imageUri)
 
@@ -104,7 +117,7 @@ class EditorViewModel @Inject constructor(
                         )
 
                         _uiState.value = _uiState.value.copy(
-                            originalBitmap = original,
+                            originalBitmap = downscaleIfNeeded(original, 2048),
                             project = project,
                             layers = emptyList(),
                             isLoading = false
@@ -317,14 +330,18 @@ class EditorViewModel @Inject constructor(
 
     fun save() {
         val state = _uiState.value
-        val original = state.originalBitmap ?: return
         val project = state.project ?: return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, saveError = null)
 
+            // Load full-res original from backup for final save quality
+            val fullResOriginal = withContext(Dispatchers.IO) {
+                backupManager.loadBackup(project.backupFileName)
+            } ?: state.originalBitmap ?: return@launch
+
             val composite = withContext(Dispatchers.Default) {
-                ImageCompositor.composite(original, state.layers)
+                ImageCompositor.composite(fullResOriginal, state.layers)
             }
 
             val uri = Uri.parse(state.imageUri)
@@ -383,20 +400,8 @@ class EditorViewModel @Inject constructor(
         previewJob = viewModelScope.launch {
             val preview = withContext(Dispatchers.Default) {
                 try {
-                    // Downscale for live preview to save memory
-                    val maxDim = maxOf(original.width, original.height)
-                    val previewBitmap = if (maxDim > 1500) {
-                        val scale = 1500f / maxDim
-                        android.graphics.Bitmap.createScaledBitmap(
-                            original,
-                            (original.width * scale).toInt(),
-                            (original.height * scale).toInt(),
-                            true
-                        )
-                    } else {
-                        original
-                    }
-                    ImageCompositor.composite(previewBitmap, state.layers)
+                    // originalBitmap is already capped at 2048px from loadImage()
+                    ImageCompositor.composite(original, state.layers)
                 } catch (_: Exception) {
                     null
                 }
