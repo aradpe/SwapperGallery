@@ -1,5 +1,9 @@
 package com.swappergallery.ui.editor
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -23,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -62,12 +68,37 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showLayers by remember { mutableStateOf(false) }
     var drawState by remember { mutableStateOf(DrawToolState()) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(imageUri) {
         viewModel.loadImage(imageUri)
     }
 
+    // Handle write permission request from the system
+    val writePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        viewModel.onWritePermissionResult(result.resultCode == Activity.RESULT_OK)
+    }
+
+    LaunchedEffect(uiState.writePermissionRequest) {
+        uiState.writePermissionRequest?.let { intentSender ->
+            writePermissionLauncher.launch(
+                IntentSenderRequest.Builder(intentSender).build()
+            )
+        }
+    }
+
+    // Show save errors via snackbar
+    LaunchedEffect(uiState.saveError) {
+        uiState.saveError?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearSaveError()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Edit", color = Color.White) },

@@ -1,5 +1,6 @@
 package com.swappergallery.ui.editor
 
+import android.content.IntentSender
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -10,6 +11,7 @@ import com.swappergallery.data.model.LayerData
 import com.swappergallery.data.model.LayerType
 import com.swappergallery.data.repository.BackupManager
 import com.swappergallery.data.repository.EditRepository
+import com.swappergallery.data.repository.SaveResult
 import com.swappergallery.util.ImageCompositor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +37,9 @@ data class EditorUiState(
     val selectedLayerId: Long? = null,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
-    val hasUnsavedChanges: Boolean = false
+    val hasUnsavedChanges: Boolean = false,
+    val writePermissionRequest: IntentSender? = null,
+    val saveError: String? = null
 )
 
 data class UndoState(
@@ -117,7 +121,26 @@ class EditorViewModel @Inject constructor(
     }
 
     fun selectLayer(layerId: Long?) {
-        _uiState.value = _uiState.value.copy(selectedLayerId = layerId)
+        if (layerId != null) {
+            // Auto-switch to the matching tool so drag/edit gestures work
+            val layer = _uiState.value.layers.find { it.id == layerId }
+            val tool = when (layer?.type) {
+                LayerType.TEXT -> EditorTool.TEXT
+                LayerType.STICKER -> EditorTool.STICKER
+                LayerType.DRAWING -> EditorTool.DRAW
+                LayerType.CROP -> EditorTool.CROP
+                LayerType.FILTER -> EditorTool.FILTER
+                LayerType.ADJUSTMENT -> EditorTool.ADJUST
+                LayerType.BLUR -> EditorTool.BLUR
+                else -> _uiState.value.activeTool
+            }
+            _uiState.value = _uiState.value.copy(
+                selectedLayerId = layerId,
+                activeTool = tool
+            )
+        } else {
+            _uiState.value = _uiState.value.copy(selectedLayerId = layerId)
+        }
     }
 
     // -- Layer operations --
@@ -249,7 +272,7 @@ class EditorViewModel @Inject constructor(
         val project = state.project ?: return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSaving = true)
+            _uiState.value = _uiState.value.copy(isSaving = true, saveError = null)
 
             val composite = withContext(Dispatchers.Default) {
                 ImageCompositor.composite(original, state.layers)
@@ -257,17 +280,47 @@ class EditorViewModel @Inject constructor(
 
             val uri = Uri.parse(state.imageUri)
             val mimeType = "image/jpeg" // Default; could detect from original
-            val success = backupManager.saveBitmapToUri(composite, uri, mimeType)
 
-            if (success) {
-                editRepository.updateProject(project.copy(updatedAt = System.currentTimeMillis()))
+            when (val result = backupManager.saveBitmapToUri(composite, uri, mimeType)) {
+                is SaveResult.Success -> {
+                    editRepository.updateProject(
+                        project.copy(updatedAt = System.currentTimeMillis())
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        hasUnsavedChanges = false
+                    )
+                }
+                is SaveResult.NeedsWriteAccess -> {
+                    // Ask user for write permission via system dialog
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        writePermissionRequest = result.intentSender
+                    )
+                }
+                is SaveResult.Failure -> {
+                    _uiState.value = _uiState.value.copy(
+                        isSaving = false,
+                        saveError = "Failed to save: ${result.error.message}"
+                    )
+                }
             }
+        }
+    }
 
+    fun onWritePermissionResult(granted: Boolean) {
+        _uiState.value = _uiState.value.copy(writePermissionRequest = null)
+        if (granted) {
+            save() // Retry now that we have permission
+        } else {
             _uiState.value = _uiState.value.copy(
-                isSaving = false,
-                hasUnsavedChanges = false
+                saveError = "Write permission denied. Cannot save to original file."
             )
         }
+    }
+
+    fun clearSaveError() {
+        _uiState.value = _uiState.value.copy(saveError = null)
     }
 
     // -- Preview --

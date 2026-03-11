@@ -1,8 +1,10 @@
 package com.swappergallery.data.repository
 
+import android.app.RecoverableSecurityException
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
+import android.content.IntentSender
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -16,6 +18,12 @@ import java.io.FileOutputStream
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+
+sealed class SaveResult {
+    data object Success : SaveResult()
+    data class NeedsWriteAccess(val intentSender: IntentSender) : SaveResult()
+    data class Failure(val error: Exception) : SaveResult()
+}
 
 @Singleton
 class BackupManager @Inject constructor(
@@ -67,46 +75,82 @@ class BackupManager @Inject constructor(
         }
     }
 
-    suspend fun saveBitmapToUri(bitmap: Bitmap, uri: Uri, mimeType: String = "image/jpeg") =
-        withContext(Dispatchers.IO) {
-            try {
-                contentResolver.openOutputStream(uri, "w")?.use { out ->
-                    val format = when {
-                        mimeType.contains("png") -> Bitmap.CompressFormat.PNG
-                        mimeType.contains("webp") -> {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                Bitmap.CompressFormat.WEBP_LOSSLESS
-                            } else {
-                                @Suppress("DEPRECATION")
-                                Bitmap.CompressFormat.WEBP
-                            }
-                        }
-                        else -> Bitmap.CompressFormat.JPEG
-                    }
-                    val quality = if (format == Bitmap.CompressFormat.PNG) 100 else 95
-                    bitmap.compress(format, quality, out)
-                }
+    suspend fun saveBitmapToUri(
+        bitmap: Bitmap,
+        uri: Uri,
+        mimeType: String = "image/jpeg"
+    ): SaveResult = withContext(Dispatchers.IO) {
+        try {
+            writeBitmapToUri(bitmap, uri, mimeType)
+            updateMediaStoreMetadata(uri)
+            SaveResult.Success
+        } catch (e: SecurityException) {
+            handleSecurityException(e, uri)
+        } catch (e: Exception) {
+            SaveResult.Failure(e)
+        }
+    }
 
-                // Update MediaStore metadata so thumbnails are regenerated
-                val values = ContentValues().apply {
-                    put(
-                        MediaStore.Images.Media.DATE_MODIFIED,
-                        System.currentTimeMillis() / 1000
-                    )
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.Images.Media.IS_PENDING, 0)
+    private fun writeBitmapToUri(bitmap: Bitmap, uri: Uri, mimeType: String) {
+        contentResolver.openOutputStream(uri, "w")?.use { out ->
+            val format = when {
+                mimeType.contains("png") -> Bitmap.CompressFormat.PNG
+                mimeType.contains("webp") -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Bitmap.CompressFormat.WEBP_LOSSLESS
+                    } else {
+                        @Suppress("DEPRECATION")
+                        Bitmap.CompressFormat.WEBP
                     }
                 }
-                try {
-                    contentResolver.update(uri, values, null, null)
-                } catch (_: Exception) {
-                    // Best effort — may fail on some devices
-                }
-                true
-            } catch (e: Exception) {
-                false
+                else -> Bitmap.CompressFormat.JPEG
+            }
+            val quality = if (format == Bitmap.CompressFormat.PNG) 100 else 95
+            bitmap.compress(format, quality, out)
+        } ?: throw Exception("Could not open output stream for $uri")
+    }
+
+    private fun updateMediaStoreMetadata(uri: Uri) {
+        val values = ContentValues().apply {
+            put(
+                MediaStore.Images.Media.DATE_MODIFIED,
+                System.currentTimeMillis() / 1000
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.IS_PENDING, 0)
             }
         }
+        try {
+            contentResolver.update(uri, values, null, null)
+        } catch (_: Exception) {
+            // Best effort — may fail on some devices
+        }
+    }
+
+    private fun handleSecurityException(e: SecurityException, uri: Uri): SaveResult {
+        // On API 29+, writing to files the app didn't create requires user permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Try RecoverableSecurityException first (works on API 29+)
+            val recoverable = e as? RecoverableSecurityException
+            if (recoverable != null) {
+                return SaveResult.NeedsWriteAccess(
+                    recoverable.userAction.actionIntent.intentSender
+                )
+            }
+            // Fallback: use createWriteRequest on API 30+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                return try {
+                    val writeRequest = MediaStore.createWriteRequest(
+                        contentResolver, listOf(uri)
+                    )
+                    SaveResult.NeedsWriteAccess(writeRequest.intentSender)
+                } catch (ex: Exception) {
+                    SaveResult.Failure(e)
+                }
+            }
+        }
+        return SaveResult.Failure(e)
+    }
 
     data class BackupResult(
         val fileName: String,
