@@ -35,9 +35,11 @@ fun EditorCanvas(
     previewBitmap: Bitmap?,
     activeTool: EditorTool,
     drawState: DrawToolState,
+    hasSelectedLayer: Boolean,
     onDrawingComplete: (List<LayerData.DrawPath>) -> Unit,
-    onTextPositionChange: (Float, Float) -> Unit,
-    onStickerPositionChange: (Float, Float) -> Unit,
+    onLayerDrag: (deltaX: Float, deltaY: Float) -> Unit,
+    onLayerDragEnd: () -> Unit,
+    onLayerTap: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var canvasWidth by remember { mutableFloatStateOf(1f) }
@@ -89,22 +91,34 @@ fun EditorCanvas(
                 }
             )
         }
-        EditorTool.TEXT -> Modifier.pointerInput(Unit) {
-            detectTapGestures { offset ->
-                onTextPositionChange(
-                    offset.x / canvasWidth,
-                    offset.y / canvasHeight
+        // Text & Sticker: drag to move selected layer, tap to place
+        EditorTool.TEXT, EditorTool.STICKER -> Modifier
+            .pointerInput(hasSelectedLayer) {
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        if (hasSelectedLayer) {
+                            onLayerDrag(
+                                dragAmount.x / canvasWidth,
+                                dragAmount.y / canvasHeight
+                            )
+                        }
+                    },
+                    onDragEnd = {
+                        if (hasSelectedLayer) {
+                            onLayerDragEnd()
+                        }
+                    }
                 )
             }
-        }
-        EditorTool.STICKER -> Modifier.pointerInput(Unit) {
-            detectTapGestures { offset ->
-                onStickerPositionChange(
-                    offset.x / canvasWidth,
-                    offset.y / canvasHeight
-                )
+            .pointerInput(hasSelectedLayer) {
+                detectTapGestures { offset ->
+                    onLayerTap(
+                        offset.x / canvasWidth,
+                        offset.y / canvasHeight
+                    )
+                }
             }
-        }
         EditorTool.NONE -> Modifier.pointerInput(Unit) {
             detectTransformGestures { _, pan, zoom, _ ->
                 scale = (scale * zoom).coerceIn(0.5f, 5f)

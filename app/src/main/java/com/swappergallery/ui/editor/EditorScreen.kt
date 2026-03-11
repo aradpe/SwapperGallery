@@ -178,6 +178,7 @@ fun EditorScreen(
                     previewBitmap = uiState.previewBitmap,
                     activeTool = uiState.activeTool,
                     drawState = drawState,
+                    hasSelectedLayer = uiState.selectedLayerId != null,
                     onDrawingComplete = { paths ->
                         if (paths.isNotEmpty()) {
                             viewModel.addLayer(
@@ -187,21 +188,20 @@ fun EditorScreen(
                             )
                         }
                     },
-                    onTextPositionChange = { x, y ->
-                        val selectedId = uiState.selectedLayerId
-                        if (selectedId != null) {
-                            val data = viewModel.getLayerData(selectedId) as? LayerData.TextData
-                            if (data != null) {
-                                viewModel.updateLayerData(selectedId, data.copy(x = x, y = y))
-                            }
-                        }
+                    onLayerDrag = { dx, dy ->
+                        viewModel.dragSelectedLayer(dx, dy)
                     },
-                    onStickerPositionChange = { x, y ->
+                    onLayerDragEnd = {
+                        viewModel.commitDrag()
+                    },
+                    onLayerTap = { x, y ->
                         val selectedId = uiState.selectedLayerId
                         if (selectedId != null) {
-                            val data = viewModel.getLayerData(selectedId) as? LayerData.StickerData
-                            if (data != null) {
-                                viewModel.updateLayerData(selectedId, data.copy(x = x, y = y))
+                            val data = viewModel.getLayerData(selectedId)
+                            when (data) {
+                                is LayerData.TextData -> viewModel.updateLayerData(selectedId, data.copy(x = x, y = y))
+                                is LayerData.StickerData -> viewModel.updateLayerData(selectedId, data.copy(x = x, y = y))
+                                else -> {}
                             }
                         }
                     }
