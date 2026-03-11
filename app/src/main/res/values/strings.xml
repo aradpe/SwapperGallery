@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SwapperGallery</string>
+    <string name="gallery_empty">No photos found</string>
+    <string name="permission_required">Permission required to access your photos</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="all_photos">All Photos</string>
+    <string name="albums">Albums</string>
+    <string name="edit">Edit</string>
+    <string name="save">Save</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="layers">Layers</string>
+    <string name="text">Text</string>
+    <string name="draw">Draw</string>
+    <string name="crop">Crop</string>
+    <string name="filter">Filter</string>
+    <string name="adjust">Adjust</string>
+    <string name="sticker">Sticker</string>
+    <string name="blur">Blur</string>
+    <string name="delete_layer">Delete layer</string>
+    <string name="toggle_visibility">Toggle visibility</string>
+    <string name="enter_text">Enter text</string>
+    <string name="brightness">Brightness</string>
+    <string name="contrast">Contrast</string>
+    <string name="saturation">Saturation</string>
+    <string name="warmth">Warmth</string>
+    <string name="sharpness">Sharpness</string>
+    <string name="highlights">Highlights</string>
+    <string name="shadows">Shadows</string>
+    <string name="vignette">Vignette</string>
+    <string name="has_edits_badge">Edited</string>
+    <string name="discard_changes">Discard changes?</string>
+    <string name="saving">Saving&#8230;</string>
+</resources>
