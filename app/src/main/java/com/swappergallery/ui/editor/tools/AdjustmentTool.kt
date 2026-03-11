@@ -43,11 +43,8 @@ fun AdjustmentToolPanel(
         vignette = vignette
     )
 
-    // When editing existing layer, push updates on slider change for real-time preview
     fun onSliderChanged() {
-        if (existingData != null) {
-            onUpdateAdjustment(currentData())
-        }
+        onUpdateAdjustment(currentData())
     }
 
     Column(

@@ -51,9 +51,7 @@ fun CropToolPanel(
     )
 
     fun onChanged() {
-        if (existingData != null) {
-            onUpdateCrop(currentData())
-        }
+        onUpdateCrop(currentData())
     }
 
     Column(

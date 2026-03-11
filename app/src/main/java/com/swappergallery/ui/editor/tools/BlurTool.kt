@@ -37,9 +37,7 @@ fun BlurToolPanel(
     )
 
     fun onChanged() {
-        if (existingData != null) {
-            onUpdateBlur(currentData())
-        }
+        onUpdateBlur(currentData())
     }
 
     Column(

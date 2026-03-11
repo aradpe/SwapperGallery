@@ -141,10 +141,18 @@ class EditorViewModel @Inject constructor(
 
     fun selectTool(tool: EditorTool) {
         val newTool = if (_uiState.value.activeTool == tool) EditorTool.NONE else tool
-        _uiState.value = _uiState.value.copy(activeTool = newTool)
-        if (newTool != EditorTool.NONE) {
-            ensureLayerForTool(newTool)
+        if (newTool == EditorTool.NONE) {
+            dismissTool()
+            return
         }
+        // If we already have a selected layer, just switch the tool panel
+        if (_uiState.value.selectedLayerId != null) {
+            _uiState.value = _uiState.value.copy(activeTool = newTool)
+            return
+        }
+        // Need to create a layer — set activeTool together with selectedLayerId
+        // so the tool panel only shows when the layer is ready
+        ensureLayerForTool(newTool)
     }
 
     fun dismissTool() {
@@ -155,7 +163,6 @@ class EditorViewModel @Inject constructor(
     }
 
     private fun ensureLayerForTool(tool: EditorTool) {
-        if (_uiState.value.selectedLayerId != null) return
         val project = _uiState.value.project ?: return
 
         val triple: Triple<LayerType, LayerData, String> = when (tool) {
@@ -164,7 +171,11 @@ class EditorViewModel @Inject constructor(
             EditorTool.BLUR -> Triple(LayerType.BLUR, LayerData.BlurData(intensity = 10f), "Blur")
             EditorTool.TEXT -> Triple(LayerType.TEXT, LayerData.TextData(text = "Text"), "Text")
             EditorTool.FILTER -> Triple(LayerType.FILTER, LayerData.FilterData(filterName = "none", intensity = 0f), "Filter")
-            else -> return // DRAW, STICKER, NONE don't need auto-creation
+            else -> {
+                // DRAW, STICKER don't need auto-creation — just show the panel
+                _uiState.value = _uiState.value.copy(activeTool = tool)
+                return
+            }
         }
 
         val (type, data, name) = triple
@@ -175,12 +186,14 @@ class EditorViewModel @Inject constructor(
                 val layer = editRepository.addLayer(project.id, type, data, name)
                 val layers = editRepository.getLayersForProject(project.id)
                 _uiState.value = _uiState.value.copy(
+                    activeTool = tool,
                     layers = layers,
                     selectedLayerId = layer.id,
                     hasUnsavedChanges = true
                 )
                 updatePreview()
             } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.value = _uiState.value.copy(
                     saveError = "Could not create layer: ${e.message}"
                 )

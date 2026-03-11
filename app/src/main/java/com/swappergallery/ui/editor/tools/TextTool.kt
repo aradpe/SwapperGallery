@@ -66,7 +66,7 @@ fun TextToolPanel(
     )
 
     fun onChanged() {
-        if (existingData != null && text.isNotBlank()) {
+        if (text.isNotBlank()) {
             onUpdateText(currentData())
         }
     }
