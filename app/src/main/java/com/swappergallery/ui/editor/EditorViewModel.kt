@@ -15,6 +15,7 @@ import com.swappergallery.data.repository.SaveResult
 import com.swappergallery.util.ImageCompositor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +64,7 @@ class EditorViewModel @Inject constructor(
 
     private val undoStack = mutableListOf<UndoState>()
     private val redoStack = mutableListOf<UndoState>()
+    private var previewJob: Job? = null
 
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
@@ -376,11 +378,32 @@ class EditorViewModel @Inject constructor(
         val state = _uiState.value
         val original = state.originalBitmap ?: return
 
-        viewModelScope.launch {
+        // Cancel any in-flight preview to avoid concurrent OOM
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
             val preview = withContext(Dispatchers.Default) {
-                ImageCompositor.composite(original, state.layers)
+                try {
+                    // Downscale for live preview to save memory
+                    val maxDim = maxOf(original.width, original.height)
+                    val previewBitmap = if (maxDim > 1500) {
+                        val scale = 1500f / maxDim
+                        android.graphics.Bitmap.createScaledBitmap(
+                            original,
+                            (original.width * scale).toInt(),
+                            (original.height * scale).toInt(),
+                            true
+                        )
+                    } else {
+                        original
+                    }
+                    ImageCompositor.composite(previewBitmap, state.layers)
+                } catch (_: Exception) {
+                    null
+                }
             }
-            _uiState.value = _uiState.value.copy(previewBitmap = preview)
+            if (preview != null) {
+                _uiState.value = _uiState.value.copy(previewBitmap = preview)
+            }
         }
     }
 
