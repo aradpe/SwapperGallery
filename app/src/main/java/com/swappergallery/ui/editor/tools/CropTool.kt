@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.RotateRight
@@ -51,6 +53,7 @@ fun CropToolPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -67,17 +70,24 @@ fun CropToolPanel(
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = { rotation = (rotation + 90f) % 360f }) {
-                Icon(Icons.Default.RotateRight, contentDescription = "Rotate", tint = Color.White)
+                Icon(Icons.Default.RotateRight, contentDescription = "Rotate 90°", tint = Color.White)
             }
             Text(
-                text = "Rotation: ${rotation.toInt()}°",
-                color = Color.White,
-                modifier = Modifier.padding(top = 12.dp)
+                text = "${rotation.toInt()}°",
+                color = Color.White
             )
         }
+
+        SliderControl(
+            label = "Fine Rotation",
+            value = rotation,
+            onValueChange = { rotation = it },
+            valueRange = 0f..360f
+        )
 
         SliderControl(
             label = "Left",

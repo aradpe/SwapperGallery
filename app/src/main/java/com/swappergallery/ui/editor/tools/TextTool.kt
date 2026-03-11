@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FormatBold
@@ -24,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.swappergallery.data.model.LayerData
 import com.swappergallery.data.model.LayerType
@@ -42,12 +48,36 @@ fun TextToolPanel(
     var fontSize by remember { mutableFloatStateOf(existingData?.fontSize ?: 48f) }
     var bold by remember { mutableStateOf(existingData?.bold ?: false) }
     var italic by remember { mutableStateOf(existingData?.italic ?: false) }
+    var rotation by remember { mutableFloatStateOf(existingData?.rotation ?: 0f) }
     var outlineWidth by remember { mutableFloatStateOf(existingData?.outlineWidth ?: 0f) }
     var outlineColor by remember { mutableStateOf(existingData?.outlineColor ?: 0xFF000000) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun submitText() {
+        if (text.isNotBlank()) {
+            val data = LayerData.TextData(
+                text = text,
+                color = color,
+                fontSize = fontSize,
+                bold = bold,
+                italic = italic,
+                rotation = rotation,
+                outlineWidth = outlineWidth,
+                outlineColor = outlineColor
+            )
+            if (existingData != null) {
+                onUpdateText(data)
+            } else {
+                onAddText(LayerType.TEXT, data)
+            }
+            keyboardController?.hide()
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -56,6 +86,8 @@ fun TextToolPanel(
             onValueChange = { text = it },
             label = { Text("Enter text") },
             modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submitText() }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
@@ -95,6 +127,13 @@ fun TextToolPanel(
         )
 
         SliderControl(
+            label = "Rotation",
+            value = rotation,
+            onValueChange = { rotation = it },
+            valueRange = -180f..180f
+        )
+
+        SliderControl(
             label = "Outline",
             value = outlineWidth,
             onValueChange = { outlineWidth = it },
@@ -102,24 +141,7 @@ fun TextToolPanel(
         )
 
         Button(
-            onClick = {
-                if (text.isNotBlank()) {
-                    val data = LayerData.TextData(
-                        text = text,
-                        color = color,
-                        fontSize = fontSize,
-                        bold = bold,
-                        italic = italic,
-                        outlineWidth = outlineWidth,
-                        outlineColor = outlineColor
-                    )
-                    if (existingData != null) {
-                        onUpdateText(data)
-                    } else {
-                        onAddText(LayerType.TEXT, data)
-                    }
-                }
-            },
+            onClick = { submitText() },
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.Add, contentDescription = null)

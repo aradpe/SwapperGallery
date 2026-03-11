@@ -74,6 +74,13 @@ fun EditorScreen(
         viewModel.loadImage(imageUri)
     }
 
+    // Auto-close layer panel when a tool panel opens to maximize canvas space
+    LaunchedEffect(uiState.activeTool) {
+        if (uiState.activeTool != EditorTool.NONE) {
+            showLayers = false
+        }
+    }
+
     // Handle write permission request from the system
     val writePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -132,7 +139,10 @@ fun EditorScreen(
                             tint = if (viewModel.canRedo) Color.White else Color.White.copy(alpha = 0.3f)
                         )
                     }
-                    IconButton(onClick = { showLayers = !showLayers }) {
+                    IconButton(onClick = {
+                        showLayers = !showLayers
+                        if (showLayers) viewModel.selectTool(EditorTool.NONE)
+                    }) {
                         Icon(
                             Icons.Default.Layers,
                             contentDescription = "Layers",
