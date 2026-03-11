@@ -23,19 +23,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +54,17 @@ fun ViewerScreen(
 
     LaunchedEffect(imageUri) {
         viewModel.loadImage(imageUri)
+    }
+
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // Increment each time viewer is resumed (e.g. after editor) to bust Coil cache
+    var imageVersion by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            imageVersion++
+        }
     }
 
     var scale by remember { mutableFloatStateOf(1f) }
@@ -106,7 +122,11 @@ fun ViewerScreen(
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = Uri.parse(imageUri),
+                model = ImageRequest.Builder(context)
+                    .data(Uri.parse(imageUri))
+                    .memoryCacheKey("${imageUri}_v${imageVersion}")
+                    .diskCacheKey("${imageUri}_v${imageVersion}")
+                    .build(),
                 contentDescription = "Photo",
                 modifier = Modifier
                     .fillMaxSize()

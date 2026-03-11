@@ -87,16 +87,20 @@ class BackupManager @Inject constructor(
                     bitmap.compress(format, quality, out)
                 }
 
-                // Notify MediaStore that the file was updated
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val values = ContentValues().apply {
+                // Update MediaStore metadata so thumbnails are regenerated
+                val values = ContentValues().apply {
+                    put(
+                        MediaStore.Images.Media.DATE_MODIFIED,
+                        System.currentTimeMillis() / 1000
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         put(MediaStore.Images.Media.IS_PENDING, 0)
                     }
-                    try {
-                        contentResolver.update(uri, values, null, null)
-                    } catch (_: Exception) {
-                        // May fail if not pending, which is fine
-                    }
+                }
+                try {
+                    contentResolver.update(uri, values, null, null)
+                } catch (_: Exception) {
+                    // Best effort — may fail on some devices
                 }
                 true
             } catch (e: Exception) {

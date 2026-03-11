@@ -43,9 +43,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -61,10 +70,21 @@ fun GalleryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val permissionState = rememberPermissionState(PermissionUtils.imagePermission)
+    val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Reload photos when permission is granted
     LaunchedEffect(permissionState.status.isGranted) {
         if (permissionState.status.isGranted) {
             viewModel.loadPhotos()
+        }
+    }
+
+    // Reload photos every time gallery becomes visible (e.g. after editor save)
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (permissionState.status.isGranted) {
+                viewModel.loadPhotos()
+            }
         }
     }
 
@@ -222,6 +242,7 @@ private fun PhotoGridItem(
     hasEdits: Boolean,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -229,7 +250,11 @@ private fun PhotoGridItem(
             .clickable(onClick = onClick)
     ) {
         AsyncImage(
-            model = photo.uri,
+            model = ImageRequest.Builder(context)
+                .data(photo.uri)
+                .memoryCacheKey("${photo.uri}_${photo.dateModified}")
+                .diskCacheKey("${photo.uri}_${photo.dateModified}")
+                .build(),
             contentDescription = photo.displayName,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -293,6 +318,7 @@ private fun AlbumItem(
     album: Album,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -307,7 +333,10 @@ private fun AlbumItem(
         ) {
             if (album.coverUri != null) {
                 AsyncImage(
-                    model = album.coverUri,
+                    model = ImageRequest.Builder(context)
+                        .data(album.coverUri)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .build(),
                     contentDescription = album.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
