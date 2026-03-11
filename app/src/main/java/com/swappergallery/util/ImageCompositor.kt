@@ -322,21 +322,13 @@ object ImageCompositor {
     }
 
     private fun blendColorMatrix(a: ColorMatrix, b: ColorMatrix, factor: Float): ColorMatrix {
-        val aArr = FloatArray(20)
-        val bArr = FloatArray(20)
-        a.getArray().copyInto(aArr)
-        b.getArray().copyInto(bArr)
+        val aArr = a.array.copyOf()
+        val bArr = b.array.copyOf()
         val result = FloatArray(20)
         for (i in 0 until 20) {
             result[i] = aArr[i] + (bArr[i] - aArr[i]) * factor
         }
         return ColorMatrix(result)
-    }
-
-    private fun ColorMatrix.getArray(): FloatArray {
-        val result = FloatArray(20)
-        getValues(result)
-        return result
     }
 
     private fun applyBlur(bitmap: Bitmap, blur: LayerData.BlurData): Bitmap {
