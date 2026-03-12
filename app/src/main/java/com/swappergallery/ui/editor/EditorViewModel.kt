@@ -743,4 +743,17 @@ class EditorViewModel @Inject constructor(
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return null
         return editRepository.deserializeLayerData(layer)
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Explicitly recycle bitmaps to free memory immediately when the editor is closed,
+        // rather than waiting for GC. Clear state references first so any lingering
+        // UI observers won't try to draw recycled bitmaps.
+        val state = _uiState.value
+        _uiState.value = state.copy(originalBitmap = null, previewBitmap = null)
+        val preview = state.previewBitmap
+        val original = state.originalBitmap
+        if (preview != null && preview !== original) preview.recycle()
+        original?.recycle()
+    }
 }
