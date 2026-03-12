@@ -66,6 +66,7 @@ class EditorViewModel @Inject constructor(
     private val undoStack = mutableListOf<UndoState>()
     private val redoStack = mutableListOf<UndoState>()
     private var previewJob: Job? = null
+    private var undoRedoJob: Job? = null
 
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
@@ -307,12 +308,16 @@ class EditorViewModel @Inject constructor(
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
         saveUndoState("Delete ${layer.type.name.lowercase()}")
 
+        // If the deleted layer is currently selected, dismiss tool panel too
+        val wasSelected = _uiState.value.selectedLayerId == layerId
+
         viewModelScope.launch {
             editRepository.deleteLayer(layer)
             val layers = editRepository.getLayersForProject(layer.projectId)
             _uiState.value = _uiState.value.copy(
                 layers = layers,
                 selectedLayerId = null,
+                activeTool = if (wasSelected) EditorTool.NONE else _uiState.value.activeTool,
                 hasUnsavedChanges = true
             )
             updatePreview()
@@ -328,13 +333,22 @@ class EditorViewModel @Inject constructor(
     }
 
     fun undo() {
-        if (undoStack.isEmpty()) return
+        if (undoStack.isEmpty() || undoRedoJob?.isActive == true) return
         val state = undoStack.removeLast()
         redoStack.add(UndoState(_uiState.value.layers.toList(), state.description))
 
-        viewModelScope.launch {
+        // Immediately update in-memory state so UI reflects the change
+        _uiState.value = _uiState.value.copy(
+            layers = state.layers,
+            selectedLayerId = null,
+            activeTool = EditorTool.NONE,
+            hasUnsavedChanges = true
+        )
+        updatePreview()
+
+        // Persist to DB in background
+        undoRedoJob = viewModelScope.launch {
             val project = _uiState.value.project ?: return@launch
-            // Restore layers from undo state
             editRepository.run {
                 val currentLayers = getLayersForProject(project.id)
                 for (layer in currentLayers) deleteLayer(layer)
@@ -343,21 +357,28 @@ class EditorViewModel @Inject constructor(
                         json.decodeFromString<LayerData>(layer.data), layer.name)
                 }
             }
+            // Re-read layers to sync IDs from DB
             val layers = editRepository.getLayersForProject(project.id)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
+            _uiState.value = _uiState.value.copy(layers = layers)
         }
     }
 
     fun redo() {
-        if (redoStack.isEmpty()) return
+        if (redoStack.isEmpty() || undoRedoJob?.isActive == true) return
         val state = redoStack.removeLast()
         undoStack.add(UndoState(_uiState.value.layers.toList(), state.description))
 
-        viewModelScope.launch {
+        // Immediately update in-memory state
+        _uiState.value = _uiState.value.copy(
+            layers = state.layers,
+            selectedLayerId = null,
+            activeTool = EditorTool.NONE,
+            hasUnsavedChanges = true
+        )
+        updatePreview()
+
+        // Persist to DB in background
+        undoRedoJob = viewModelScope.launch {
             val project = _uiState.value.project ?: return@launch
             editRepository.run {
                 val currentLayers = getLayersForProject(project.id)
@@ -368,11 +389,7 @@ class EditorViewModel @Inject constructor(
                 }
             }
             val layers = editRepository.getLayersForProject(project.id)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
+            _uiState.value = _uiState.value.copy(layers = layers)
         }
     }
 
@@ -384,42 +401,55 @@ class EditorViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, saveError = null)
-
-            // Load full-res original from backup for final save quality
-            val fullResOriginal = withContext(Dispatchers.IO) {
-                backupManager.loadBackup(project.backupFileName)
-            } ?: state.originalBitmap ?: return@launch
-
-            val composite = withContext(Dispatchers.Default) {
-                ImageCompositor.composite(fullResOriginal, state.layers)
-            }
-
-            val uri = Uri.parse(state.imageUri)
-            val mimeType = "image/jpeg" // Default; could detect from original
-
-            when (val result = backupManager.saveBitmapToUri(composite, uri, mimeType)) {
-                is SaveResult.Success -> {
-                    editRepository.updateProject(
-                        project.copy(updatedAt = System.currentTimeMillis())
-                    )
+            try {
+                // Load full-res original from backup for final save quality
+                val fullResOriginal = withContext(Dispatchers.IO) {
+                    backupManager.loadBackup(project.backupFileName)
+                } ?: state.originalBitmap
+                if (fullResOriginal == null) {
                     _uiState.value = _uiState.value.copy(
                         isSaving = false,
-                        hasUnsavedChanges = false
+                        saveError = "Could not load original image for saving."
                     )
+                    return@launch
                 }
-                is SaveResult.NeedsWriteAccess -> {
-                    // Ask user for write permission via system dialog
-                    _uiState.value = _uiState.value.copy(
-                        isSaving = false,
-                        writePermissionRequest = result.intentSender
-                    )
+
+                val composite = withContext(Dispatchers.Default) {
+                    ImageCompositor.composite(fullResOriginal, state.layers)
                 }
-                is SaveResult.Failure -> {
-                    _uiState.value = _uiState.value.copy(
-                        isSaving = false,
-                        saveError = "Failed to save: ${result.error.message}"
-                    )
+
+                val uri = Uri.parse(state.imageUri)
+                val mimeType = "image/jpeg" // Default; could detect from original
+
+                when (val result = backupManager.saveBitmapToUri(composite, uri, mimeType)) {
+                    is SaveResult.Success -> {
+                        editRepository.updateProject(
+                            project.copy(updatedAt = System.currentTimeMillis())
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            isSaving = false,
+                            hasUnsavedChanges = false
+                        )
+                    }
+                    is SaveResult.NeedsWriteAccess -> {
+                        _uiState.value = _uiState.value.copy(
+                            isSaving = false,
+                            writePermissionRequest = result.intentSender
+                        )
+                    }
+                    is SaveResult.Failure -> {
+                        _uiState.value = _uiState.value.copy(
+                            isSaving = false,
+                            saveError = "Failed to save: ${result.error.message}"
+                        )
+                    }
                 }
+            } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.value = _uiState.value.copy(
+                    isSaving = false,
+                    saveError = "Save failed: ${e.message}"
+                )
             }
         }
     }

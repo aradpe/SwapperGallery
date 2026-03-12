@@ -316,7 +316,6 @@ fun EditorScreen(
                             if (uiState.selectedLayerId != null) {
                                 IconButton(onClick = {
                                     uiState.selectedLayerId?.let { viewModel.deleteLayer(it) }
-                                    viewModel.dismissTool()
                                 }) {
                                     Icon(
                                         Icons.Default.Delete,

@@ -47,8 +47,11 @@ fun EditorCanvas(
     onLayerTap: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var canvasWidth by remember { mutableFloatStateOf(1f) }
-    var canvasHeight by remember { mutableFloatStateOf(1f) }
+    // Image bounds within the canvas (updated each frame)
+    var imgX by remember { mutableFloatStateOf(0f) }
+    var imgY by remember { mutableFloatStateOf(0f) }
+    var imgW by remember { mutableFloatStateOf(1f) }
+    var imgH by remember { mutableFloatStateOf(1f) }
 
     // Drawing state
     val currentPath = remember { mutableStateListOf<DrawingPoint>() }
@@ -59,26 +62,20 @@ fun EditorCanvas(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
 
+    // Convert canvas pixel to normalized image coordinate (0-1)
+    fun toImageX(px: Float) = ((px - imgX) / imgW).coerceIn(0f, 1f)
+    fun toImageY(py: Float) = ((py - imgY) / imgH).coerceIn(0f, 1f)
+
     val drawModifier = when (activeTool) {
         EditorTool.DRAW -> Modifier.pointerInput(drawState) {
             detectDragGestures(
                 onDragStart = { offset ->
                     currentPath.clear()
-                    currentPath.add(
-                        DrawingPoint(
-                            offset.x / canvasWidth,
-                            offset.y / canvasHeight
-                        )
-                    )
+                    currentPath.add(DrawingPoint(toImageX(offset.x), toImageY(offset.y)))
                 },
                 onDrag = { change, _ ->
                     change.consume()
-                    currentPath.add(
-                        DrawingPoint(
-                            change.position.x / canvasWidth,
-                            change.position.y / canvasHeight
-                        )
-                    )
+                    currentPath.add(DrawingPoint(toImageX(change.position.x), toImageY(change.position.y)))
                 },
                 onDragEnd = {
                     if (currentPath.size >= 2) {
@@ -108,8 +105,8 @@ fun EditorCanvas(
                         val rotation = event.calculateRotation()
                         if (hasSelectedLayer && (pan != Offset.Zero || zoom != 1f || rotation != 0f)) {
                             onLayerTransform(
-                                pan.x / canvasWidth,
-                                pan.y / canvasHeight,
+                                pan.x / imgW,
+                                pan.y / imgH,
                                 zoom,
                                 rotation
                             )
@@ -123,10 +120,7 @@ fun EditorCanvas(
             }
             .pointerInput(hasSelectedLayer) {
                 detectTapGestures { offset ->
-                    onLayerTap(
-                        offset.x / canvasWidth,
-                        offset.y / canvasHeight
-                    )
+                    onLayerTap(toImageX(offset.x), toImageY(offset.y))
                 }
             }
         EditorTool.NONE -> Modifier
@@ -144,12 +138,12 @@ fun EditorCanvas(
             }
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
-                    onLayerTap(offset.x / canvasWidth, offset.y / canvasHeight)
+                    onLayerTap(toImageX(offset.x), toImageY(offset.y))
                 }
             }
         else -> Modifier.pointerInput(Unit) {
             detectTapGestures { offset ->
-                onLayerTap(offset.x / canvasWidth, offset.y / canvasHeight)
+                onLayerTap(toImageX(offset.x), toImageY(offset.y))
             }
         }
     }
@@ -159,9 +153,6 @@ fun EditorCanvas(
             .fillMaxSize()
             .then(drawModifier)
     ) {
-        canvasWidth = size.width
-        canvasHeight = size.height
-
         // Draw the preview bitmap
         previewBitmap?.let { bitmap ->
             val imageBitmap = bitmap.asImageBitmap()
@@ -177,6 +168,12 @@ fun EditorCanvas(
             val drawX = (size.width - drawWidth) / 2f
             val drawY = (size.height - drawHeight) / 2f
 
+            // Update image bounds for coordinate conversion
+            imgX = drawX
+            imgY = drawY
+            imgW = drawWidth
+            imgH = drawHeight
+
             drawImage(
                 image = imageBitmap,
                 srcOffset = IntOffset.Zero,
@@ -186,15 +183,15 @@ fun EditorCanvas(
             )
         }
 
-        // Draw in-progress paths (while user is drawing)
+        // Draw in-progress paths (positioned relative to image area)
         for (pathWithStyle in completedPaths) {
             if (pathWithStyle.points.size < 2) continue
             val path = Path()
             val first = pathWithStyle.points.first()
-            path.moveTo(first.x * size.width, first.y * size.height)
+            path.moveTo(imgX + first.x * imgW, imgY + first.y * imgH)
             for (i in 1 until pathWithStyle.points.size) {
                 val pt = pathWithStyle.points[i]
-                path.lineTo(pt.x * size.width, pt.y * size.height)
+                path.lineTo(imgX + pt.x * imgW, imgY + pt.y * imgH)
             }
             val pathColor = if (pathWithStyle.isEraser) {
                 Color.White.copy(alpha = 0.5f)
@@ -216,10 +213,10 @@ fun EditorCanvas(
         if (currentPath.size >= 2) {
             val path = Path()
             val first = currentPath.first()
-            path.moveTo(first.x * size.width, first.y * size.height)
+            path.moveTo(imgX + first.x * imgW, imgY + first.y * imgH)
             for (i in 1 until currentPath.size) {
                 val pt = currentPath[i]
-                path.lineTo(pt.x * size.width, pt.y * size.height)
+                path.lineTo(imgX + pt.x * imgW, imgY + pt.y * imgH)
             }
             val currentColor = if (drawState.isEraser) {
                 Color.White.copy(alpha = 0.5f)
