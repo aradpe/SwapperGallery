@@ -195,6 +195,9 @@ fun EditorCanvas(
             )
         }
 
+        // Scale stroke width to match ImageCompositor output (which uses minOf(w,h)/500)
+        val strokeScale = (minOf(imgW, imgH) / 500f).coerceAtLeast(1f)
+
         // Draw in-progress paths (positioned relative to image area)
         for (pathWithStyle in completedPaths) {
             if (pathWithStyle.points.size < 2) continue
@@ -214,7 +217,7 @@ fun EditorCanvas(
                 path = path,
                 color = pathColor,
                 style = Stroke(
-                    width = pathWithStyle.strokeWidth,
+                    width = pathWithStyle.strokeWidth * strokeScale,
                     cap = StrokeCap.Round,
                     join = StrokeJoin.Round
                 )
@@ -239,7 +242,7 @@ fun EditorCanvas(
                 path = path,
                 color = currentColor,
                 style = Stroke(
-                    width = drawState.strokeWidth,
+                    width = drawState.strokeWidth * strokeScale,
                     cap = StrokeCap.Round,
                     join = StrokeJoin.Round
                 )

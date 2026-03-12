@@ -368,7 +368,7 @@ class EditorViewModel @Inject constructor(
         val updatedLayers = _uiState.value.layers.filter { it.id != layerId }
         _uiState.value = _uiState.value.copy(
             layers = updatedLayers,
-            selectedLayerId = null,
+            selectedLayerId = if (wasSelected) null else _uiState.value.selectedLayerId,
             activeTool = if (wasSelected) EditorTool.NONE else _uiState.value.activeTool,
             hasUnsavedChanges = true
         )
