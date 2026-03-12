@@ -22,7 +22,7 @@ object Routes {
 }
 
 @Composable
-fun SwapperNavGraph(
+fun GolaryNavGraph(
     navController: NavHostController,
     startDestination: String = Routes.GALLERY,
     externalImageUri: String? = null,

@@ -23,7 +23,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun SwapperGalleryTheme(
+fun GolaryTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit

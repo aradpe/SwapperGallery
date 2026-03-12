@@ -11,19 +11,19 @@
         android:maxSdkVersion="28" />
 
     <application
-        android:name=".SwapperGalleryApp"
+        android:name=".GolaryApp"
         android:allowBackup="true"
         android:largeHeap="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SwapperGallery">
+        android:theme="@style/Theme.Golary">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.SwapperGallery"
+            android:theme="@style/Theme.Golary"
             android:windowSoftInputMode="adjustResize">
 
             <!-- Main launcher -->

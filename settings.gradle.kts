@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SwapperGallery"
+rootProject.name = "Golary"
 include(":app")

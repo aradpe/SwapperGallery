@@ -458,9 +458,11 @@ class EditorViewModel @Inject constructor(
             val state = _uiState.value
             val project = state.project ?: return@launch
             _uiState.value = _uiState.value.copy(isSaving = true, saveError = null)
+            var fullResOriginal: Bitmap? = null
+            var composite: Bitmap? = null
             try {
                 // Load full-res original from backup for final save quality
-                val fullResOriginal = withContext(Dispatchers.IO) {
+                fullResOriginal = withContext(Dispatchers.IO) {
                     backupManager.loadBackup(project.backupFileName)
                 } ?: state.originalBitmap
                 if (fullResOriginal == null) {
@@ -471,7 +473,7 @@ class EditorViewModel @Inject constructor(
                     return@launch
                 }
 
-                val composite = withContext(Dispatchers.Default) {
+                composite = withContext(Dispatchers.Default) {
                     ImageCompositor.composite(fullResOriginal, state.layers)
                 }
 
@@ -501,16 +503,16 @@ class EditorViewModel @Inject constructor(
                         )
                     }
                 }
-
-                // Recycle full-res bitmaps to free memory after saving
-                if (composite !== fullResOriginal) composite.recycle()
-                if (fullResOriginal !== state.originalBitmap) fullResOriginal.recycle()
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     saveError = "Save failed: ${e.message}"
                 )
+            } finally {
+                // Always recycle full-res bitmaps, even on error, to prevent leaks
+                if (composite != null && composite !== fullResOriginal) composite.recycle()
+                if (fullResOriginal != null && fullResOriginal !== state.originalBitmap) fullResOriginal.recycle()
             }
         }
     }
@@ -540,24 +542,22 @@ class EditorViewModel @Inject constructor(
         previewJob = viewModelScope.launch {
             // Brief delay so rapid changes don't all trigger heavy compositing
             kotlinx.coroutines.delay(50)
-
-            // Read layers AFTER the delay to get the most up-to-date state
-            val layers = _uiState.value.layers
-            _uiState.value = _uiState.value.copy(isCompositing = true)
-
-            // Compositing is cancellable — if a newer preview is requested,
-            // this work is discarded before it finishes (saves CPU/memory).
-            val preview = withContext(Dispatchers.Default) {
-                try {
-                    ImageCompositor.composite(original, layers)
-                } catch (_: Throwable) {
-                    null
-                }
-            }
-
-            // Only the state update + recycle is NonCancellable to prevent bitmap leaks.
-            // If cancelled here, the bitmap must still be assigned to state or recycled.
+            // NonCancellable ensures the bitmap from composite() is safely captured
+            // and assigned to state (not leaked). Without this, cancelling during
+            // withContext(Default) discards the bitmap reference via CancellationException.
+            // Since composite() is non-suspending, it can't be interrupted anyway —
+            // NonCancellable just prevents the result from being thrown away.
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                // Read layers AFTER the delay to get the most up-to-date state
+                val layers = _uiState.value.layers
+                _uiState.value = _uiState.value.copy(isCompositing = true)
+                val preview = withContext(Dispatchers.Default) {
+                    try {
+                        ImageCompositor.composite(original, layers)
+                    } catch (_: Throwable) {
+                        null
+                    }
+                }
                 if (preview != null) {
                     val old = _uiState.value.previewBitmap
                     _uiState.value = _uiState.value.copy(previewBitmap = preview, isCompositing = false)

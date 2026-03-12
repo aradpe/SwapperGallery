@@ -14,8 +14,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
-import com.swappergallery.ui.navigation.SwapperNavGraph
-import com.swappergallery.ui.theme.SwapperGalleryTheme
+import com.swappergallery.ui.navigation.GolaryNavGraph
+import com.swappergallery.ui.theme.GolaryTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -30,10 +30,10 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
 
         setContent {
-            SwapperGalleryTheme {
+            GolaryTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val navController = rememberNavController()
-                    SwapperNavGraph(
+                    GolaryNavGraph(
                         navController = navController,
                         externalImageUri = externalImageUri,
                         onExternalImageHandled = { externalImageUri = null }
