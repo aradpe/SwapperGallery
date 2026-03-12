@@ -10,14 +10,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.swappergallery.data.model.LayerData
 import com.swappergallery.data.model.LayerType
+import com.swappergallery.ui.editor.components.SliderControl
 
 val stickerEmojis = listOf(
     // Smileys
@@ -149,39 +157,113 @@ val stickerEmojis = listOf(
 
 @Composable
 fun StickerToolPanel(
+    existingData: LayerData.StickerData? = null,
     onAddSticker: (LayerType, LayerData) -> Unit,
+    onUpdateSticker: (LayerData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-    ) {
-        Text(
-            text = "Tap a sticker to add it",
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 13.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+    // When a sticker is selected, show editing controls + emoji picker
+    if (existingData != null) {
+        var rotation by remember { mutableFloatStateOf(existingData.rotation) }
+        var scale by remember { mutableFloatStateOf(existingData.scale) }
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxWidth().height(340.dp)
+        // Sync rotation/scale from external changes (e.g. canvas pinch gesture)
+        LaunchedEffect(existingData.rotation) { rotation = existingData.rotation }
+        LaunchedEffect(existingData.scale) { scale = existingData.scale }
+
+        fun currentData() = existingData.copy(rotation = rotation, scale = scale)
+
+        fun onChanged() { onUpdateSticker(currentData()) }
+
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            items(stickerEmojis) { emoji ->
-                Text(
-                    text = emoji,
-                    fontSize = 28.sp,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clickable {
-                            val data = LayerData.StickerData(emoji = emoji)
-                            onAddSticker(LayerType.STICKER, data)
-                        }
-                        .padding(4.dp),
-                )
+            Text(
+                text = "Selected: ${existingData.emoji}",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+
+            SliderControl(
+                label = "Scale",
+                value = scale,
+                onValueChange = { scale = it; onChanged() },
+                valueRange = 0.1f..10f
+            )
+
+            SliderControl(
+                label = "Rotation",
+                value = rotation,
+                onValueChange = { rotation = it; onChanged() },
+                valueRange = -180f..180f
+            )
+
+            Text(
+                text = "Change sticker",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+            )
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(7),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().height(200.dp)
+            ) {
+                items(stickerEmojis) { emoji ->
+                    Text(
+                        text = emoji,
+                        fontSize = 28.sp,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clickable {
+                                // Replace the selected sticker's emoji
+                                onUpdateSticker(currentData().copy(emoji = emoji))
+                            }
+                            .padding(4.dp),
+                    )
+                }
+            }
+        }
+    } else {
+        // No sticker selected — just show the emoji picker to add new stickers
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Text(
+                text = "Tap a sticker to add it",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(7),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().height(340.dp)
+            ) {
+                items(stickerEmojis) { emoji ->
+                    Text(
+                        text = emoji,
+                        fontSize = 28.sp,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clickable {
+                                val data = LayerData.StickerData(emoji = emoji)
+                                onAddSticker(LayerType.STICKER, data)
+                            }
+                            .padding(4.dp),
+                    )
+                }
             }
         }
     }

@@ -1,8 +1,8 @@
 package com.swappergallery.ui.editor.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -100,6 +99,7 @@ fun LayerPanel(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LayerItem(
     layer: EditLayer,
@@ -125,7 +125,10 @@ private fun LayerItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(backgroundColor)
-            .clickable(onClick = onLayerClick)
+            .combinedClickable(
+                onClick = onLayerClick,
+                onLongClick = { isEditing = true }
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -166,12 +169,7 @@ private fun LayerItem(
                 Text(
                     text = displayName,
                     color = if (layer.visible) Color.White else Color.White.copy(alpha = 0.4f),
-                    fontSize = 14.sp,
-                    modifier = Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onLongPress = { isEditing = true }
-                        )
-                    }
+                    fontSize = 14.sp
                 )
             }
             Text(

@@ -71,11 +71,18 @@ class GalleryViewModel @Inject constructor(
                 selectedAlbumId = albumId,
                 isLoading = true
             )
-            val photos = galleryRepository.getPhotosForAlbum(albumId)
-            _uiState.value = _uiState.value.copy(
-                photos = photos,
-                isLoading = false
-            )
+            try {
+                val photos = galleryRepository.getPhotosForAlbum(albumId)
+                _uiState.value = _uiState.value.copy(
+                    photos = photos,
+                    isLoading = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    loadError = "Could not load album: ${e.message}"
+                )
+            }
         }
     }
 

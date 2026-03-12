@@ -560,42 +560,6 @@ class EditorViewModel @Inject constructor(
         }
     }
 
-    // -- Drag to move --
-
-    fun dragSelectedLayer(deltaX: Float, deltaY: Float) {
-        val selectedId = _uiState.value.selectedLayerId ?: return
-        val data = getLayerData(selectedId) ?: return
-
-        // Save undo state once at the start of the drag gesture (before any changes)
-        if (!undoSavedForDrag) {
-            val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
-            saveUndoState("Move ${layer.type.name.lowercase()}")
-            undoSavedForDrag = true
-        }
-
-        val updated = when (data) {
-            is LayerData.TextData -> data.copy(
-                x = (data.x + deltaX).coerceIn(0f, 1f),
-                y = (data.y + deltaY).coerceIn(0f, 1f)
-            )
-            is LayerData.StickerData -> data.copy(
-                x = (data.x + deltaX).coerceIn(0f, 1f),
-                y = (data.y + deltaY).coerceIn(0f, 1f)
-            )
-            else -> return
-        }
-
-        // Update in-memory immediately for smooth dragging (no undo state per drag frame)
-        val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
-        val updatedLayer = layer.copy(data = editRepository.serializeLayerData(updated))
-        val updatedLayers = _uiState.value.layers.map { if (it.id == selectedId) updatedLayer else it }
-        _uiState.value = _uiState.value.copy(
-            layers = updatedLayers,
-            hasUnsavedChanges = true
-        )
-        updatePreview()
-    }
-
     fun transformSelectedLayer(panX: Float, panY: Float, zoomDelta: Float, rotationDelta: Float) {
         val selectedId = _uiState.value.selectedLayerId ?: return
         val data = getLayerData(selectedId) ?: return

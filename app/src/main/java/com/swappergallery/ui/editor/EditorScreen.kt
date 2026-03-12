@@ -380,8 +380,12 @@ fun EditorScreen(
                         }
                         EditorTool.STICKER -> {
                             StickerToolPanel(
+                                existingData = selectedLayerData as? LayerData.StickerData,
                                 onAddSticker = { type, data ->
                                     viewModel.addLayer(type, data)
+                                },
+                                onUpdateSticker = { data ->
+                                    uiState.selectedLayerId?.let { viewModel.updateLayerData(it, data) }
                                 }
                             )
                         }
