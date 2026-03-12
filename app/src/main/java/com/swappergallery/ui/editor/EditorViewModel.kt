@@ -282,14 +282,21 @@ class EditorViewModel @Inject constructor(
         saveUndoState("Add ${type.name.lowercase()}")
 
         viewModelScope.launch {
-            val layer = editRepository.addLayer(project.id, type, data, name)
-            val layers = editRepository.getLayersForProject(project.id)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                selectedLayerId = layer.id,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
+            try {
+                val layer = editRepository.addLayer(project.id, type, data, name)
+                val layers = editRepository.getLayersForProject(project.id)
+                _uiState.value = _uiState.value.copy(
+                    layers = layers,
+                    selectedLayerId = layer.id,
+                    hasUnsavedChanges = true
+                )
+                updatePreview()
+            } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.value = _uiState.value.copy(
+                    saveError = "Could not add layer: ${e.message}"
+                )
+            }
         }
     }
 

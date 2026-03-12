@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -337,6 +338,9 @@ fun EditorScreen(
                     }
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
+                    // key() forces tool panel recreation when selected layer changes,
+                    // so remember{} blocks reinitialize with the new layer's data
+                    key(uiState.selectedLayerId) {
                     val selectedLayerData = uiState.selectedLayerId?.let { viewModel.getLayerData(it) }
 
                     when (uiState.activeTool) {
@@ -399,6 +403,7 @@ fun EditorScreen(
                         }
                         EditorTool.NONE -> { /* No panel */ }
                     }
+                    } // end key(selectedLayerId)
                 }
             }
         }
