@@ -19,6 +19,7 @@ data class GalleryUiState(
     val albums: List<Album> = emptyList(),
     val editedUris: Set<String> = emptySet(),
     val isLoading: Boolean = true,
+    val loadError: String? = null,
     val selectedAlbumId: Long? = null,
     val currentTab: GalleryTab = GalleryTab.PHOTOS
 )
@@ -52,7 +53,10 @@ class GalleryViewModel @Inject constructor(
                     isLoading = false
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    loadError = "Could not load photos: ${e.message}"
+                )
             }
         }
     }

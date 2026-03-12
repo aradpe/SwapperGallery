@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -72,7 +74,26 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showLayers by remember { mutableStateOf(false) }
     var drawState by remember { mutableStateOf(DrawToolState()) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard changes?") },
+            text = { Text("You have unsaved changes. Are you sure you want to go back?") },
+            confirmButton = {
+                TextButton(onClick = { showDiscardDialog = false; onBack() }) {
+                    Text("Discard")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("Keep editing")
+                }
+            }
+        )
+    }
 
     LaunchedEffect(imageUri) {
         viewModel.loadImage(imageUri)
@@ -114,7 +135,9 @@ fun EditorScreen(
             TopAppBar(
                 title = { Text("Edit", color = Color.White) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (uiState.hasUnsavedChanges) showDiscardDialog = true else onBack()
+                    }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -244,6 +267,15 @@ fun EditorScreen(
                         viewModel.handleCanvasTap(x, y)
                     }
                 )
+                if (uiState.isCompositing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        color = Color.White.copy(alpha = 0.7f),
+                        strokeWidth = 2.dp
+                    )
+                }
             }
 
             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))

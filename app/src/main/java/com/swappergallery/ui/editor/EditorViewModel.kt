@@ -38,6 +38,7 @@ data class EditorUiState(
     val selectedLayerId: Long? = null,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
+    val isCompositing: Boolean = false,
     val hasUnsavedChanges: Boolean = false,
     val writePermissionRequest: IntentSender? = null,
     val saveError: String? = null
@@ -261,18 +262,29 @@ class EditorViewModel @Inject constructor(
         }
     }
 
+    private var updateJob: Job? = null
+
     fun updateLayerData(layerId: Long, data: LayerData) {
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
         saveUndoState("Update ${layer.type.name.lowercase()}")
 
-        viewModelScope.launch {
-            editRepository.updateLayerData(layer, data)
-            val layers = editRepository.getLayersForProject(layer.projectId)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
+        // Update in-memory immediately so preview uses latest state (no race)
+        val updatedLayer = layer.copy(data = editRepository.serializeLayerData(data))
+        val updatedLayers = _uiState.value.layers.map { if (it.id == layerId) updatedLayer else it }
+        _uiState.value = _uiState.value.copy(
+            layers = updatedLayers,
+            hasUnsavedChanges = true
+        )
+        updatePreview()
+
+        // Persist to DB in background (cancel previous pending write)
+        updateJob?.cancel()
+        updateJob = viewModelScope.launch {
+            try {
+                editRepository.updateLayerData(layer, data)
+            } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
         }
     }
 
@@ -436,6 +448,9 @@ class EditorViewModel @Inject constructor(
         // Cancel any in-flight preview to avoid concurrent OOM
         previewJob?.cancel()
         previewJob = viewModelScope.launch {
+            // Brief delay so rapid changes don't all trigger heavy compositing
+            kotlinx.coroutines.delay(50)
+            _uiState.value = _uiState.value.copy(isCompositing = true)
             val preview = withContext(Dispatchers.Default) {
                 try {
                     // originalBitmap is already capped at 2048px from loadImage()
@@ -445,7 +460,14 @@ class EditorViewModel @Inject constructor(
                 }
             }
             if (preview != null) {
-                _uiState.value = _uiState.value.copy(previewBitmap = preview)
+                val old = _uiState.value.previewBitmap
+                _uiState.value = _uiState.value.copy(previewBitmap = preview, isCompositing = false)
+                // Recycle old preview to free memory (it's no longer displayed)
+                if (old != null && old !== preview && old !== _uiState.value.originalBitmap) {
+                    old.recycle()
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(isCompositing = false)
             }
         }
     }

@@ -38,7 +38,9 @@ object ImageCompositor {
             if (cropLayer != null) {
                 val cropData = json.decodeFromString<LayerData>(cropLayer.data) as? LayerData.CropData
                 if (cropData != null) {
+                    val prev = current
                     current = applyCrop(current, cropData)
+                    if (current !== prev && prev !== original) prev.recycle()
                 }
             }
         } catch (_: Throwable) { /* skip crop on error */ }
@@ -48,12 +50,15 @@ object ImageCompositor {
             if (!layer.visible) continue
             try {
                 val data = json.decodeFromString<LayerData>(layer.data)
+                val prev = current
                 current = when (layer.type) {
                     LayerType.ADJUSTMENT -> applyAdjustment(current, data as LayerData.AdjustmentData)
                     LayerType.FILTER -> applyFilter(current, data as LayerData.FilterData)
                     LayerType.BLUR -> applyBlur(current, data as LayerData.BlurData)
                     else -> current
                 }
+                // Recycle old bitmap if a new one was created (free memory for next layer)
+                if (current !== prev && prev !== original) prev.recycle()
             } catch (_: Throwable) { /* skip this layer on error, continue with next */ }
         }
 
@@ -94,7 +99,14 @@ object ImageCompositor {
     }
 
     private fun applyAdjustment(bitmap: Bitmap, adj: LayerData.AdjustmentData): Bitmap {
+        // Skip entirely if all adjustments are at default values
+        if (adj.brightness == 0f && adj.contrast == 0f && adj.saturation == 0f &&
+            adj.warmth == 0f && adj.highlights == 0f && adj.shadows == 0f &&
+            adj.sharpness == 0f && adj.vignette == 0f) {
+            return bitmap
+        }
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            ?: return bitmap
         val canvas = Canvas(result)
         val paint = Paint()
 
@@ -227,18 +239,21 @@ object ImageCompositor {
     }
 
     private fun applyFilter(bitmap: Bitmap, filter: LayerData.FilterData): Bitmap {
+        val cm = getFilterColorMatrix(filter.filterName)
+        // Skip entirely if no filter applied or intensity is zero
+        if (cm == null || filter.intensity <= 0f) {
+            return bitmap
+        }
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            ?: return bitmap
         val canvas = Canvas(result)
         val paint = Paint()
 
-        val cm = getFilterColorMatrix(filter.filterName)
-        if (cm != null && filter.intensity > 0f) {
-            // Blend between identity and filter matrix based on intensity
-            val identity = ColorMatrix()
-            val blended = blendColorMatrix(identity, cm, filter.intensity)
-            paint.colorFilter = ColorMatrixColorFilter(blended)
-            canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        }
+        // Blend between identity and filter matrix based on intensity
+        val identity = ColorMatrix()
+        val blended = blendColorMatrix(identity, cm, filter.intensity)
+        paint.colorFilter = ColorMatrixColorFilter(blended)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
 
         return result
     }
@@ -424,7 +439,10 @@ object ImageCompositor {
     private fun applyRadialBlur(bitmap: Bitmap, blur: LayerData.BlurData): Bitmap {
         val blurred = simpleBlur(bitmap, blur.intensity)
         val result = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-            ?: return bitmap // copy() can return null
+        if (result == null) {
+            if (blurred !== bitmap) blurred.recycle()
+            return bitmap
+        }
         val canvas = Canvas(result)
 
         val cx = blur.centerX * bitmap.width
