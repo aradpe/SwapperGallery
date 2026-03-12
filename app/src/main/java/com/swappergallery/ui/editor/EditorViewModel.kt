@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 enum class EditorTool {
@@ -56,11 +55,6 @@ class EditorViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val contentResolver: ContentResolver
 ) : ViewModel() {
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -159,10 +153,26 @@ class EditorViewModel @Inject constructor(
             dismissTool()
             return
         }
-        // If we already have a selected layer, just switch the tool panel
+        // If we have a selected layer, check if it matches the new tool type
         if (_uiState.value.selectedLayerId != null) {
-            _uiState.value = _uiState.value.copy(activeTool = newTool)
-            return
+            val selectedLayer = _uiState.value.layers.find { it.id == _uiState.value.selectedLayerId }
+            val matchesTool = when (selectedLayer?.type) {
+                LayerType.TEXT -> newTool == EditorTool.TEXT
+                LayerType.STICKER -> newTool == EditorTool.STICKER
+                LayerType.DRAWING -> newTool == EditorTool.DRAW
+                LayerType.CROP -> newTool == EditorTool.CROP
+                LayerType.FILTER -> newTool == EditorTool.FILTER
+                LayerType.ADJUSTMENT -> newTool == EditorTool.ADJUST
+                LayerType.BLUR -> newTool == EditorTool.BLUR
+                null -> false
+            }
+            if (matchesTool) {
+                // Same tool type — keep layer selected, just update tool panel
+                _uiState.value = _uiState.value.copy(activeTool = newTool)
+                return
+            }
+            // Different tool type — deselect and fall through to find/create matching layer
+            _uiState.value = _uiState.value.copy(selectedLayerId = null)
         }
         // Check if there's an existing layer of this type to re-edit
         val targetType = toolToLayerType(newTool)
@@ -315,14 +325,18 @@ class EditorViewModel @Inject constructor(
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
         saveUndoState("Toggle visibility")
 
+        // Update in-memory immediately for responsive UI
+        val updatedLayer = layer.copy(visible = !layer.visible)
+        val updatedLayers = _uiState.value.layers.map { if (it.id == layerId) updatedLayer else it }
+        _uiState.value = _uiState.value.copy(
+            layers = updatedLayers,
+            hasUnsavedChanges = true
+        )
+        updatePreview()
+
+        // Persist to DB in background
         viewModelScope.launch {
-            editRepository.updateLayer(layer.copy(visible = !layer.visible))
-            val layers = editRepository.getLayersForProject(layer.projectId)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
+            editRepository.updateLayer(updatedLayer)
         }
     }
 
@@ -333,16 +347,19 @@ class EditorViewModel @Inject constructor(
         // If the deleted layer is currently selected, dismiss tool panel too
         val wasSelected = _uiState.value.selectedLayerId == layerId
 
+        // Update in-memory immediately for responsive UI
+        val updatedLayers = _uiState.value.layers.filter { it.id != layerId }
+        _uiState.value = _uiState.value.copy(
+            layers = updatedLayers,
+            selectedLayerId = null,
+            activeTool = if (wasSelected) EditorTool.NONE else _uiState.value.activeTool,
+            hasUnsavedChanges = true
+        )
+        updatePreview()
+
+        // Persist to DB in background
         viewModelScope.launch {
             editRepository.deleteLayer(layer)
-            val layers = editRepository.getLayersForProject(layer.projectId)
-            _uiState.value = _uiState.value.copy(
-                layers = layers,
-                selectedLayerId = null,
-                activeTool = if (wasSelected) EditorTool.NONE else _uiState.value.activeTool,
-                hasUnsavedChanges = true
-            )
-            updatePreview()
         }
     }
 
@@ -368,17 +385,10 @@ class EditorViewModel @Inject constructor(
         )
         updatePreview()
 
-        // Persist to DB in background
+        // Persist to DB in background (preserves orderIndex, visible, name)
         undoRedoJob = viewModelScope.launch {
             val project = _uiState.value.project ?: return@launch
-            editRepository.run {
-                val currentLayers = getLayersForProject(project.id)
-                for (layer in currentLayers) deleteLayer(layer)
-                for (layer in state.layers) {
-                    addLayer(project.id, layer.type,
-                        json.decodeFromString<LayerData>(layer.data), layer.name)
-                }
-            }
+            editRepository.restoreLayers(project.id, state.layers)
             // Re-read layers to sync IDs from DB
             val layers = editRepository.getLayersForProject(project.id)
             _uiState.value = _uiState.value.copy(layers = layers)
@@ -399,17 +409,10 @@ class EditorViewModel @Inject constructor(
         )
         updatePreview()
 
-        // Persist to DB in background
+        // Persist to DB in background (preserves orderIndex, visible, name)
         undoRedoJob = viewModelScope.launch {
             val project = _uiState.value.project ?: return@launch
-            editRepository.run {
-                val currentLayers = getLayersForProject(project.id)
-                for (layer in currentLayers) deleteLayer(layer)
-                for (layer in state.layers) {
-                    addLayer(project.id, layer.type,
-                        json.decodeFromString<LayerData>(layer.data), layer.name)
-                }
-            }
+            editRepository.restoreLayers(project.id, state.layers)
             val layers = editRepository.getLayersForProject(project.id)
             _uiState.value = _uiState.value.copy(layers = layers)
         }

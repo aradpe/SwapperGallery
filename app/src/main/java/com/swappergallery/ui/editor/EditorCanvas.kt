@@ -16,7 +16,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -97,13 +96,16 @@ fun EditorCanvas(
         EditorTool.TEXT, EditorTool.STICKER -> Modifier
             .pointerInput(hasSelectedLayer) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val downPos = down.position
+                    var hasMoved = false
                     do {
                         val event = awaitPointerEvent()
                         val pan = event.calculatePan()
                         val zoom = event.calculateZoom()
                         val rotation = event.calculateRotation()
                         if (hasSelectedLayer && (pan != Offset.Zero || zoom != 1f || rotation != 0f)) {
+                            hasMoved = true
                             onLayerTransform(
                                 pan.x / imgW,
                                 pan.y / imgH,
@@ -113,14 +115,12 @@ fun EditorCanvas(
                         }
                         event.changes.forEach { it.consume() }
                     } while (event.changes.any { it.pressed })
-                    if (hasSelectedLayer) {
+                    if (hasMoved && hasSelectedLayer) {
                         onLayerDragEnd()
+                    } else if (!hasMoved) {
+                        // No drag/pinch occurred — treat as a tap for selection
+                        onLayerTap(toImageX(downPos.x), toImageY(downPos.y))
                     }
-                }
-            }
-            .pointerInput(hasSelectedLayer) {
-                detectTapGestures { offset ->
-                    onLayerTap(toImageX(offset.x), toImageY(offset.y))
                 }
             }
         EditorTool.NONE -> Modifier
@@ -148,6 +148,15 @@ fun EditorCanvas(
         }
     }
 
+    // Reset zoom/pan when switching to an editing tool
+    LaunchedEffect(activeTool) {
+        if (activeTool != EditorTool.NONE) {
+            scale = 1f
+            offsetX = 0f
+            offsetY = 0f
+        }
+    }
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -159,14 +168,17 @@ fun EditorCanvas(
             val imageAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
             val canvasAspect = size.width / size.height
 
-            val (drawWidth, drawHeight) = if (imageAspect > canvasAspect) {
+            val (baseWidth, baseHeight) = if (imageAspect > canvasAspect) {
                 size.width to (size.width / imageAspect)
             } else {
                 (size.height * imageAspect) to size.height
             }
 
-            val drawX = (size.width - drawWidth) / 2f
-            val drawY = (size.height - drawHeight) / 2f
+            // Apply zoom/pan transforms
+            val drawWidth = baseWidth * scale
+            val drawHeight = baseHeight * scale
+            val drawX = (size.width - baseWidth) / 2f + (baseWidth - drawWidth) / 2f + offsetX
+            val drawY = (size.height - baseHeight) / 2f + (baseHeight - drawHeight) / 2f + offsetY
 
             // Update image bounds for coordinate conversion
             imgX = drawX

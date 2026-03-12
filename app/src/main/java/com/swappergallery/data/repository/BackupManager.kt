@@ -63,8 +63,8 @@ class BackupManager @Inject constructor(
         File(backupDir, fileName).delete()
     }
 
-    fun hasBackup(fileName: String): Boolean {
-        return File(backupDir, fileName).exists()
+    suspend fun hasBackup(fileName: String): Boolean = withContext(Dispatchers.IO) {
+        File(backupDir, fileName).exists()
     }
 
     suspend fun loadBitmapFromUri(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {

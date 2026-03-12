@@ -488,12 +488,17 @@ object ImageCompositor {
         val drawBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val drawCanvas = Canvas(drawBitmap)
 
+        // Scale stroke width relative to image size so strokes look the same
+        // regardless of resolution. The draw tool stores screen-pixel values;
+        // 500 is a reference display dimension in px.
+        val strokeScale = minOf(width, height).toFloat() / 500f
+
         for (drawPath in drawing.paths) {
             if (drawPath.points.size < 2) continue
 
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = drawPath.color.toInt()
-                strokeWidth = drawPath.strokeWidth
+                strokeWidth = drawPath.strokeWidth * strokeScale.coerceAtLeast(1f)
                 style = Paint.Style.STROKE
                 strokeCap = Paint.Cap.ROUND
                 strokeJoin = Paint.Join.ROUND
@@ -522,9 +527,13 @@ object ImageCompositor {
     private fun drawText(canvas: Canvas, width: Int, height: Int, text: LayerData.TextData) {
         if (text.text.isEmpty()) return
 
+        // Scale pixel values relative to image size so text looks the same
+        // regardless of resolution. 500 is a reference display dimension.
+        val scaleFactor = (minOf(width, height).toFloat() / 500f).coerceAtLeast(1f)
+
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = text.color.toInt()
-            textSize = text.fontSize * text.scale
+            textSize = text.fontSize * text.scale * scaleFactor
             typeface = Typeface.create(
                 text.fontFamily,
                 when {
@@ -557,7 +566,8 @@ object ImageCompositor {
                 if (w > maxWidth) maxWidth = w
             }
             val totalHeight = lineHeight * lines.size
-            val padding = 16f
+            val padding = 16f * scaleFactor
+            val cornerRadius = 8f * scaleFactor
             canvas.drawRoundRect(
                 RectF(
                     x - maxWidth / 2 - padding,
@@ -565,7 +575,7 @@ object ImageCompositor {
                     x + maxWidth / 2 + padding,
                     y + paint.fontMetrics.ascent + totalHeight + padding
                 ),
-                8f, 8f, bgPaint
+                cornerRadius, cornerRadius, bgPaint
             )
         }
 
@@ -578,7 +588,7 @@ object ImageCompositor {
                 val outlinePaint = Paint(paint).apply {
                     color = text.outlineColor.toInt()
                     style = Paint.Style.STROKE
-                    strokeWidth = text.outlineWidth
+                    strokeWidth = text.outlineWidth * scaleFactor
                 }
                 canvas.drawText(line, x, ly, outlinePaint)
             }
@@ -591,8 +601,11 @@ object ImageCompositor {
     }
 
     private fun drawSticker(canvas: Canvas, width: Int, height: Int, sticker: LayerData.StickerData) {
+        // Scale pixel values relative to image size
+        val scaleFactor = (minOf(width, height).toFloat() / 500f).coerceAtLeast(1f)
+
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 80f * sticker.scale
+            textSize = 80f * sticker.scale * scaleFactor
             textAlign = Paint.Align.CENTER
         }
 

@@ -66,7 +66,23 @@ fun CropToolPanel(
             AspectRatio.entries.forEach { ratio ->
                 FilterChip(
                     selected = selectedRatio == ratio,
-                    onClick = { selectedRatio = ratio },
+                    onClick = {
+                        selectedRatio = ratio
+                        if (ratio.ratio != null) {
+                            // Enforce the selected aspect ratio on crop bounds
+                            val cropW = right - left
+                            val cropH = bottom - top
+                            val current = cropW / cropH
+                            if (current > ratio.ratio!!) {
+                                // Too wide — shrink right edge
+                                right = (left + cropH * ratio.ratio!!).coerceAtMost(1f)
+                            } else {
+                                // Too tall — shrink bottom edge
+                                bottom = (top + cropW / ratio.ratio!!).coerceAtMost(1f)
+                            }
+                            onChanged()
+                        }
+                    },
                     label = { Text(ratio.label) }
                 )
             }

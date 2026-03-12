@@ -95,6 +95,18 @@ class EditRepository @Inject constructor(
     suspend fun getLayersForProject(projectId: Long): List<EditLayer> =
         dao.getLayersForProject(projectId)
 
+    /**
+     * Replace all layers for a project with the given list.
+     * Preserves all metadata (orderIndex, visible, name, etc.) unlike addLayer().
+     * Used by undo/redo to restore exact layer state.
+     */
+    suspend fun restoreLayers(projectId: Long, layers: List<EditLayer>) {
+        dao.deleteAllLayersForProject(projectId)
+        // Reset IDs so Room auto-generates new ones, but preserve all other fields
+        val layersToInsert = layers.map { it.copy(id = 0) }
+        dao.insertLayers(layersToInsert)
+    }
+
     fun observeLayers(projectId: Long): Flow<List<EditLayer>> =
         dao.observeLayersForProject(projectId)
 
