@@ -81,6 +81,9 @@ class EditorViewModel @Inject constructor(
     }
 
     fun loadImage(uri: String) {
+        // Skip if already loaded with this URI (e.g., activity config change)
+        if (_uiState.value.imageUri == uri && _uiState.value.originalBitmap != null) return
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(imageUri = uri, isLoading = true)
 
@@ -522,31 +525,37 @@ class EditorViewModel @Inject constructor(
         previewJob = viewModelScope.launch {
             // Brief delay so rapid changes don't all trigger heavy compositing
             kotlinx.coroutines.delay(50)
-            // Read layers AFTER the delay to get the most up-to-date state
-            val layers = _uiState.value.layers
-            _uiState.value = _uiState.value.copy(isCompositing = true)
-            val preview = withContext(Dispatchers.Default) {
-                try {
-                    // originalBitmap is already capped at 2048px from loadImage()
-                    ImageCompositor.composite(original, layers)
-                } catch (_: Throwable) {
-                    null
-                }
-            }
-            if (preview != null) {
-                val old = _uiState.value.previewBitmap
-                _uiState.value = _uiState.value.copy(previewBitmap = preview, isCompositing = false)
-                // Recycle old preview to free memory. Use a short delay to ensure
-                // the render thread has finished drawing the old bitmap before recycling.
-                if (old != null && old !== preview && old !== _uiState.value.originalBitmap) {
-                    val toRecycle = old
-                    viewModelScope.launch {
-                        kotlinx.coroutines.delay(200)
-                        toRecycle.recycle()
+            // Use NonCancellable so that if this job is cancelled during compositing,
+            // the bitmap from composite() is properly assigned to state (not leaked).
+            // Without this, cancelling during withContext(Default) discards the bitmap
+            // reference, leaking ~16MB per cancelled compositing operation.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                // Read layers AFTER the delay to get the most up-to-date state
+                val layers = _uiState.value.layers
+                _uiState.value = _uiState.value.copy(isCompositing = true)
+                val preview = withContext(Dispatchers.Default) {
+                    try {
+                        // originalBitmap is already capped at 2048px from loadImage()
+                        ImageCompositor.composite(original, layers)
+                    } catch (_: Throwable) {
+                        null
                     }
                 }
-            } else {
-                _uiState.value = _uiState.value.copy(isCompositing = false)
+                if (preview != null) {
+                    val old = _uiState.value.previewBitmap
+                    _uiState.value = _uiState.value.copy(previewBitmap = preview, isCompositing = false)
+                    // Recycle old preview to free memory. Use a short delay to ensure
+                    // the render thread has finished drawing the old bitmap before recycling.
+                    if (old != null && old !== preview && old !== _uiState.value.originalBitmap) {
+                        val toRecycle = old
+                        viewModelScope.launch {
+                            kotlinx.coroutines.delay(200)
+                            toRecycle.recycle()
+                        }
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(isCompositing = false)
+                }
             }
         }
     }
