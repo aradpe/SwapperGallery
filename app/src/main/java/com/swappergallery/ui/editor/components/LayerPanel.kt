@@ -15,6 +15,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
@@ -52,6 +54,8 @@ fun LayerPanel(
     onToggleVisibility: (Long) -> Unit,
     onDeleteLayer: (Long) -> Unit,
     onRenameLayer: (Long, String) -> Unit,
+    onMoveLayerUp: (Long) -> Unit,
+    onMoveLayerDown: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -78,14 +82,17 @@ fun LayerPanel(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(layers.reversed(), key = { it.id }) { layer ->
+                val sorted = layers.sortedByDescending { it.orderIndex }
+                items(sorted, key = { it.id }) { layer ->
                     LayerItem(
                         layer = layer,
                         isSelected = layer.id == selectedLayerId,
                         onLayerClick = { onLayerClick(layer.id) },
                         onToggleVisibility = { onToggleVisibility(layer.id) },
                         onDelete = { onDeleteLayer(layer.id) },
-                        onRename = { onRenameLayer(layer.id, it) }
+                        onRename = { onRenameLayer(layer.id, it) },
+                        onMoveUp = { onMoveLayerUp(layer.id) },
+                        onMoveDown = { onMoveLayerDown(layer.id) }
                     )
                 }
             }
@@ -100,7 +107,9 @@ private fun LayerItem(
     onLayerClick: () -> Unit,
     onToggleVisibility: () -> Unit,
     onDelete: () -> Unit,
-    onRename: (String) -> Unit
+    onRename: (String) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
     val displayName = layer.name.ifEmpty { layer.type.name }
@@ -160,7 +169,7 @@ private fun LayerItem(
                     fontSize = 14.sp,
                     modifier = Modifier.pointerInput(Unit) {
                         detectTapGestures(
-                            onDoubleTap = { isEditing = true }
+                            onLongPress = { isEditing = true }
                         )
                     }
                 )
@@ -169,6 +178,21 @@ private fun LayerItem(
                 text = layer.type.name.lowercase().replaceFirstChar { it.uppercase() },
                 color = Color.White.copy(alpha = 0.5f),
                 fontSize = 11.sp
+            )
+        }
+
+        IconButton(onClick = onMoveUp) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = "Move up",
+                tint = Color.White.copy(alpha = 0.6f)
+            )
+        }
+        IconButton(onClick = onMoveDown) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Move down",
+                tint = Color.White.copy(alpha = 0.6f)
             )
         }
 

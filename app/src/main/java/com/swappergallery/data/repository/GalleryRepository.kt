@@ -73,9 +73,9 @@ class GalleryRepository @Inject constructor(
         photos
     }
 
-    suspend fun getAlbums(): List<Album> = withContext(Dispatchers.IO) {
+    suspend fun getAlbums(preloadedPhotos: List<MediaItem>? = null): List<Album> = withContext(Dispatchers.IO) {
         val albumMap = mutableMapOf<Long, MutableList<MediaItem>>()
-        val photos = getAllPhotos()
+        val photos = preloadedPhotos ?: getAllPhotos()
 
         for (photo in photos) {
             albumMap.getOrPut(photo.bucketId) { mutableListOf() }.add(photo)

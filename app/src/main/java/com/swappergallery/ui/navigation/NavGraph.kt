@@ -25,7 +25,8 @@ object Routes {
 fun SwapperNavGraph(
     navController: NavHostController,
     startDestination: String = Routes.GALLERY,
-    externalImageUri: String? = null
+    externalImageUri: String? = null,
+    onExternalImageHandled: (() -> Unit)? = null
 ) {
     NavHost(
         navController = navController,
@@ -71,12 +72,13 @@ fun SwapperNavGraph(
         }
     }
 
-    // Handle external image URI
+    // Handle external image URI (one-shot: navigate then clear)
     LaunchedEffect(externalImageUri) {
         if (externalImageUri != null) {
             navController.navigate(Routes.editor(externalImageUri)) {
                 launchSingleTop = true
             }
+            onExternalImageHandled?.invoke()
         }
     }
 }

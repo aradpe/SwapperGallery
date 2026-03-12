@@ -93,7 +93,9 @@ object ImageCompositor {
         if (crop.rotation != 0f) {
             val matrix = android.graphics.Matrix()
             matrix.postRotate(crop.rotation)
-            return Bitmap.createBitmap(cropped, 0, 0, cropped.width, cropped.height, matrix, true)
+            val rotated = Bitmap.createBitmap(cropped, 0, 0, cropped.width, cropped.height, matrix, true)
+            if (rotated !== cropped) cropped.recycle() // Recycle intermediate bitmap
+            return rotated
         }
         return cropped
     }

@@ -44,11 +44,13 @@ class BackupManager @Inject constructor(
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
 
-        BackupResult(
+        val result = BackupResult(
             fileName = fileName,
             width = bitmap.width,
             height = bitmap.height
         )
+        bitmap.recycle() // Free full-res bitmap after saving to disk
+        result
     }
 
     suspend fun loadBackup(fileName: String): Bitmap? = withContext(Dispatchers.IO) {

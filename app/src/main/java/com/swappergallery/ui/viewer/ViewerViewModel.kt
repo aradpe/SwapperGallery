@@ -9,6 +9,7 @@ import com.swappergallery.data.repository.EditRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,18 +45,21 @@ class ViewerViewModel @Inject constructor(
     fun loadImage(uri: String) {
         _uiState.value = _uiState.value.copy(imageUri = uri)
         viewModelScope.launch {
-            try {
-                val project = editRepository.getProjectByUri(uri)
+            // Run both queries concurrently but update state atomically
+            kotlinx.coroutines.coroutineScope {
+                val projectDeferred = async {
+                    try { editRepository.getProjectByUri(uri) } catch (_: Exception) { null }
+                }
+                val infoDeferred = async {
+                    withContext(Dispatchers.IO) { queryImageInfo(Uri.parse(uri)) }
+                }
+                val project = projectDeferred.await()
+                val info = infoDeferred.await()
                 _uiState.value = _uiState.value.copy(
                     hasEditProject = project != null,
-                    projectId = project?.id
+                    projectId = project?.id,
+                    imageInfo = info ?: _uiState.value.imageInfo
                 )
-            } catch (_: Exception) { }
-        }
-        viewModelScope.launch {
-            val info = withContext(Dispatchers.IO) { queryImageInfo(Uri.parse(uri)) }
-            if (info != null) {
-                _uiState.value = _uiState.value.copy(imageInfo = info)
             }
         }
     }

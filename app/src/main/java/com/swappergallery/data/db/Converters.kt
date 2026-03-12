@@ -8,5 +8,9 @@ class Converters {
     fun fromLayerType(value: LayerType): String = value.name
 
     @TypeConverter
-    fun toLayerType(value: String): LayerType = LayerType.valueOf(value)
+    fun toLayerType(value: String): LayerType = try {
+        LayerType.valueOf(value)
+    } catch (_: IllegalArgumentException) {
+        LayerType.ADJUSTMENT // Fallback for unknown types
+    }
 }

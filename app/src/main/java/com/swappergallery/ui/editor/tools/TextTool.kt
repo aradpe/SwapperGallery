@@ -61,7 +61,7 @@ fun TextToolPanel(
         fontSize = fontSize,
         bold = bold,
         italic = italic,
-        rotation = existingData?.rotation ?: rotation,
+        rotation = rotation, // Always use local state (synced from gestures via LaunchedEffect)
         outlineWidth = outlineWidth,
         outlineColor = outlineColor,
         x = existingData?.x ?: 0.5f,

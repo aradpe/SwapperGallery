@@ -1,5 +1,6 @@
 package com.swappergallery.ui.editor
 
+import android.content.ContentResolver
 import android.content.IntentSender
 import android.graphics.Bitmap
 import android.net.Uri
@@ -52,7 +53,8 @@ data class UndoState(
 @HiltViewModel
 class EditorViewModel @Inject constructor(
     private val editRepository: EditRepository,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val contentResolver: ContentResolver
 ) : ViewModel() {
 
     private val json = Json {
@@ -97,8 +99,14 @@ class EditorViewModel @Inject constructor(
                     val original = backupManager.loadBackup(existingProject.backupFileName)
                     val layers = editRepository.getLayersForProject(existingProject.id)
 
+                    val downscaled = original?.let {
+                        val ds = downscaleIfNeeded(it, 2048)
+                        if (ds !== it) it.recycle() // Free full-res after downscaling
+                        ds
+                    }
+
                     _uiState.value = _uiState.value.copy(
-                        originalBitmap = original?.let { downscaleIfNeeded(it, 2048) },
+                        originalBitmap = downscaled,
                         project = existingProject,
                         layers = layers,
                         isLoading = false
@@ -118,8 +126,11 @@ class EditorViewModel @Inject constructor(
                             height = backup.height
                         )
 
+                        val downscaled = downscaleIfNeeded(original, 2048)
+                        if (downscaled !== original) original.recycle() // Free full-res after downscaling
+
                         _uiState.value = _uiState.value.copy(
-                            originalBitmap = downscaleIfNeeded(original, 2048),
+                            originalBitmap = downscaled,
                             project = project,
                             layers = emptyList(),
                             isLoading = false
@@ -142,6 +153,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun selectTool(tool: EditorTool) {
+        undoSavedForCurrentEdit = false
         val newTool = if (_uiState.value.activeTool == tool) EditorTool.NONE else tool
         if (newTool == EditorTool.NONE) {
             dismissTool()
@@ -177,6 +189,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun dismissTool() {
+        undoSavedForCurrentEdit = false
         _uiState.value = _uiState.value.copy(
             activeTool = EditorTool.NONE,
             selectedLayerId = null
@@ -223,6 +236,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun selectLayer(layerId: Long?) {
+        undoSavedForCurrentEdit = false
         if (layerId != null) {
             // Auto-switch to the matching tool so drag/edit gestures work
             val layer = _uiState.value.layers.find { it.id == layerId }
@@ -265,9 +279,17 @@ class EditorViewModel @Inject constructor(
 
     private var updateJob: Job? = null
 
+    // Track whether an undo snapshot has been taken for the current edit gesture.
+    // Reset when tool is dismissed or a different layer is selected.
+    private var undoSavedForCurrentEdit = false
+
     fun updateLayerData(layerId: Long, data: LayerData) {
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
-        saveUndoState("Update ${layer.type.name.lowercase()}")
+        // Only save undo state once per edit gesture (not every slider tick)
+        if (!undoSavedForCurrentEdit) {
+            saveUndoState("Update ${layer.type.name.lowercase()}")
+            undoSavedForCurrentEdit = true
+        }
 
         // Update in-memory immediately so preview uses latest state (no race)
         val updatedLayer = layer.copy(data = editRepository.serializeLayerData(data))
@@ -396,10 +418,17 @@ class EditorViewModel @Inject constructor(
     // -- Save --
 
     fun save() {
-        val state = _uiState.value
-        val project = state.project ?: return
+        // Commit any pending drawing paths by switching away from draw tool
+        if (_uiState.value.activeTool == EditorTool.DRAW) {
+            dismissTool()
+        }
 
         viewModelScope.launch {
+            // Brief delay to allow LaunchedEffect to commit pending drawings
+            kotlinx.coroutines.delay(100)
+
+            val state = _uiState.value
+            val project = state.project ?: return@launch
             _uiState.value = _uiState.value.copy(isSaving = true, saveError = null)
             try {
                 // Load full-res original from backup for final save quality
@@ -419,7 +448,7 @@ class EditorViewModel @Inject constructor(
                 }
 
                 val uri = Uri.parse(state.imageUri)
-                val mimeType = "image/jpeg" // Default; could detect from original
+                val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
 
                 when (val result = backupManager.saveBitmapToUri(composite, uri, mimeType)) {
                     is SaveResult.Success -> {
@@ -444,6 +473,10 @@ class EditorViewModel @Inject constructor(
                         )
                     }
                 }
+
+                // Recycle full-res bitmaps to free memory after saving
+                if (composite !== fullResOriginal) composite.recycle()
+                if (fullResOriginal !== state.originalBitmap) fullResOriginal.recycle()
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.value = _uiState.value.copy(
@@ -472,19 +505,20 @@ class EditorViewModel @Inject constructor(
     // -- Preview --
 
     private fun updatePreview() {
-        val state = _uiState.value
-        val original = state.originalBitmap ?: return
+        val original = _uiState.value.originalBitmap ?: return
 
         // Cancel any in-flight preview to avoid concurrent OOM
         previewJob?.cancel()
         previewJob = viewModelScope.launch {
             // Brief delay so rapid changes don't all trigger heavy compositing
             kotlinx.coroutines.delay(50)
+            // Read layers AFTER the delay to get the most up-to-date state
+            val layers = _uiState.value.layers
             _uiState.value = _uiState.value.copy(isCompositing = true)
             val preview = withContext(Dispatchers.Default) {
                 try {
                     // originalBitmap is already capped at 2048px from loadImage()
-                    ImageCompositor.composite(original, state.layers)
+                    ImageCompositor.composite(original, layers)
                 } catch (_: Throwable) {
                     null
                 }
@@ -597,15 +631,9 @@ class EditorViewModel @Inject constructor(
         }
 
         if (hitLayers.isEmpty()) {
-            // Tapped empty space: move selected element to tap position
-            val selectedId = _uiState.value.selectedLayerId
-            if (selectedId != null) {
-                val data = getLayerData(selectedId)
-                when (data) {
-                    is LayerData.TextData -> updateLayerData(selectedId, data.copy(x = normalizedX, y = normalizedY))
-                    is LayerData.StickerData -> updateLayerData(selectedId, data.copy(x = normalizedX, y = normalizedY))
-                    else -> {}
-                }
+            // Tapped empty space: deselect current element (instead of teleporting)
+            if (_uiState.value.selectedLayerId != null) {
+                dismissTool()
             }
             lastTapLayers = emptyList()
             lastTapCycleIndex = 0
@@ -629,6 +657,62 @@ class EditorViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(layers = updatedLayers)
         viewModelScope.launch {
             editRepository.updateLayer(updatedLayer)
+        }
+    }
+
+    // -- Layer reordering --
+
+    fun moveLayerUp(layerId: Long) {
+        val layers = _uiState.value.layers.sortedBy { it.orderIndex }
+        val idx = layers.indexOfFirst { it.id == layerId }
+        if (idx < 0 || idx >= layers.size - 1) return // Already at top or not found
+
+        saveUndoState("Reorder layer")
+        val a = layers[idx]
+        val b = layers[idx + 1]
+        val updatedA = a.copy(orderIndex = b.orderIndex)
+        val updatedB = b.copy(orderIndex = a.orderIndex)
+
+        val updatedLayers = _uiState.value.layers.map { layer ->
+            when (layer.id) {
+                a.id -> updatedA
+                b.id -> updatedB
+                else -> layer
+            }
+        }
+        _uiState.value = _uiState.value.copy(layers = updatedLayers, hasUnsavedChanges = true)
+        updatePreview()
+
+        viewModelScope.launch {
+            editRepository.updateLayer(updatedA)
+            editRepository.updateLayer(updatedB)
+        }
+    }
+
+    fun moveLayerDown(layerId: Long) {
+        val layers = _uiState.value.layers.sortedBy { it.orderIndex }
+        val idx = layers.indexOfFirst { it.id == layerId }
+        if (idx <= 0) return // Already at bottom or not found
+
+        saveUndoState("Reorder layer")
+        val a = layers[idx]
+        val b = layers[idx - 1]
+        val updatedA = a.copy(orderIndex = b.orderIndex)
+        val updatedB = b.copy(orderIndex = a.orderIndex)
+
+        val updatedLayers = _uiState.value.layers.map { layer ->
+            when (layer.id) {
+                a.id -> updatedA
+                b.id -> updatedB
+                else -> layer
+            }
+        }
+        _uiState.value = _uiState.value.copy(layers = updatedLayers, hasUnsavedChanges = true)
+        updatePreview()
+
+        viewModelScope.launch {
+            editRepository.updateLayer(updatedA)
+            editRepository.updateLayer(updatedB)
         }
     }
 

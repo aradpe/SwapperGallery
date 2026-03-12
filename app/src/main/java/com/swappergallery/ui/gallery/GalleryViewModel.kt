@@ -44,7 +44,7 @@ class GalleryViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val photos = galleryRepository.getAllPhotos()
-                val albums = galleryRepository.getAlbums()
+                val albums = galleryRepository.getAlbums(preloadedPhotos = photos)
                 val editedUris = editRepository.getAllEditedUris()
                 _uiState.value = _uiState.value.copy(
                     photos = photos,

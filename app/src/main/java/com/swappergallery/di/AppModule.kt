@@ -23,7 +23,8 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "swapper_gallery.db"
-        ).build()
+        ).fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides

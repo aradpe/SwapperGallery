@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     SwapperNavGraph(
                         navController = navController,
-                        externalImageUri = externalImageUri
+                        externalImageUri = externalImageUri,
+                        onExternalImageHandled = { externalImageUri = null }
                     )
                 }
             }
