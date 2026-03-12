@@ -148,6 +148,7 @@ class EditorViewModel @Inject constructor(
 
     fun selectTool(tool: EditorTool) {
         undoSavedForCurrentEdit = false
+        undoSavedForDrag = false
         val newTool = if (_uiState.value.activeTool == tool) EditorTool.NONE else tool
         if (newTool == EditorTool.NONE) {
             dismissTool()
@@ -200,6 +201,7 @@ class EditorViewModel @Inject constructor(
 
     fun dismissTool() {
         undoSavedForCurrentEdit = false
+        undoSavedForDrag = false
         _uiState.value = _uiState.value.copy(
             activeTool = EditorTool.NONE,
             selectedLayerId = null
@@ -247,6 +249,7 @@ class EditorViewModel @Inject constructor(
 
     fun selectLayer(layerId: Long?) {
         undoSavedForCurrentEdit = false
+        undoSavedForDrag = false
         if (layerId != null) {
             // Auto-switch to the matching tool so drag/edit gestures work
             val layer = _uiState.value.layers.find { it.id == layerId }
@@ -292,6 +295,10 @@ class EditorViewModel @Inject constructor(
     // Track whether an undo snapshot has been taken for the current edit gesture.
     // Reset when tool is dismissed or a different layer is selected.
     private var undoSavedForCurrentEdit = false
+
+    // Track whether an undo snapshot has been taken for the current drag/transform gesture.
+    // Reset when the gesture ends (commitDrag) or selection changes.
+    private var undoSavedForDrag = false
 
     fun updateLayerData(layerId: Long, data: LayerData) {
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
@@ -529,9 +536,14 @@ class EditorViewModel @Inject constructor(
             if (preview != null) {
                 val old = _uiState.value.previewBitmap
                 _uiState.value = _uiState.value.copy(previewBitmap = preview, isCompositing = false)
-                // Recycle old preview to free memory (it's no longer displayed)
+                // Recycle old preview to free memory. Use a short delay to ensure
+                // the render thread has finished drawing the old bitmap before recycling.
                 if (old != null && old !== preview && old !== _uiState.value.originalBitmap) {
-                    old.recycle()
+                    val toRecycle = old
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(200)
+                        toRecycle.recycle()
+                    }
                 }
             } else {
                 _uiState.value = _uiState.value.copy(isCompositing = false)
@@ -544,6 +556,13 @@ class EditorViewModel @Inject constructor(
     fun dragSelectedLayer(deltaX: Float, deltaY: Float) {
         val selectedId = _uiState.value.selectedLayerId ?: return
         val data = getLayerData(selectedId) ?: return
+
+        // Save undo state once at the start of the drag gesture (before any changes)
+        if (!undoSavedForDrag) {
+            val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
+            saveUndoState("Move ${layer.type.name.lowercase()}")
+            undoSavedForDrag = true
+        }
 
         val updated = when (data) {
             is LayerData.TextData -> data.copy(
@@ -572,6 +591,13 @@ class EditorViewModel @Inject constructor(
         val selectedId = _uiState.value.selectedLayerId ?: return
         val data = getLayerData(selectedId) ?: return
 
+        // Save undo state once at the start of the transform gesture (before any changes)
+        if (!undoSavedForDrag) {
+            val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
+            saveUndoState("Transform ${layer.type.name.lowercase()}")
+            undoSavedForDrag = true
+        }
+
         val updated = when (data) {
             is LayerData.TextData -> data.copy(
                 x = (data.x + panX).coerceIn(0f, 1f),
@@ -599,10 +625,10 @@ class EditorViewModel @Inject constructor(
     }
 
     fun commitDrag() {
-        // Persist the drag result to Room
+        // Persist the drag result to Room (undo state was already saved at gesture start)
         val selectedId = _uiState.value.selectedLayerId ?: return
         val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
-        saveUndoState("Move ${layer.type.name.lowercase()}")
+        undoSavedForDrag = false
         viewModelScope.launch {
             editRepository.updateLayer(layer)
         }

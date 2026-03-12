@@ -101,10 +101,10 @@ class EditRepository @Inject constructor(
      * Used by undo/redo to restore exact layer state.
      */
     suspend fun restoreLayers(projectId: Long, layers: List<EditLayer>) {
-        dao.deleteAllLayersForProject(projectId)
-        // Reset IDs so Room auto-generates new ones, but preserve all other fields
+        // Reset IDs so Room auto-generates new ones, but preserve all other fields.
+        // Uses atomic @Transaction to prevent data loss if app crashes mid-operation.
         val layersToInsert = layers.map { it.copy(id = 0) }
-        dao.insertLayers(layersToInsert)
+        dao.replaceAllLayers(projectId, layersToInsert)
     }
 
     fun observeLayers(projectId: Long): Flow<List<EditLayer>> =

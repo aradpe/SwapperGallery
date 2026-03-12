@@ -70,4 +70,14 @@ interface EditProjectDao {
         deleteAllLayersForProject(project.id)
         deleteProject(project)
     }
+
+    /**
+     * Atomically replace all layers for a project.
+     * Used by undo/redo to ensure no data loss if app crashes mid-operation.
+     */
+    @Transaction
+    suspend fun replaceAllLayers(projectId: Long, layers: List<EditLayer>) {
+        deleteAllLayersForProject(projectId)
+        insertLayers(layers)
+    }
 }
