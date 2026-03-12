@@ -63,6 +63,7 @@ class EditorViewModel @Inject constructor(
     private val redoStack = mutableListOf<UndoState>()
     private var previewJob: Job? = null
     private var undoRedoJob: Job? = null
+    private var addLayerJob: Job? = null
 
     val canUndo: Boolean get() = undoStack.isNotEmpty()
     val canRedo: Boolean get() = redoStack.isNotEmpty()
@@ -281,7 +282,7 @@ class EditorViewModel @Inject constructor(
         val project = _uiState.value.project ?: return
         saveUndoState("Add ${type.name.lowercase()}")
 
-        viewModelScope.launch {
+        addLayerJob = viewModelScope.launch {
             try {
                 val layer = editRepository.addLayer(project.id, type, data, name)
                 val layers = editRepository.getLayersForProject(project.id)
@@ -327,11 +328,12 @@ class EditorViewModel @Inject constructor(
         )
         updatePreview()
 
-        // Persist to DB in background (cancel previous pending write)
+        // Persist to DB in background (cancel previous pending write).
+        // Use updatedLayer (not original layer) so concurrent visibility/rename changes aren't overwritten.
         updateJob?.cancel()
         updateJob = viewModelScope.launch {
             try {
-                editRepository.updateLayerData(layer, data)
+                editRepository.updateLayerData(updatedLayer, data)
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             }
@@ -339,6 +341,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun toggleLayerVisibility(layerId: Long) {
+        if (undoRedoJob?.isActive == true) return  // IDs stale during undo/redo DB sync
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
         saveUndoState("Toggle visibility")
 
@@ -358,6 +361,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun deleteLayer(layerId: Long) {
+        if (undoRedoJob?.isActive == true) return  // IDs stale during undo/redo DB sync
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
         saveUndoState("Delete ${layer.type.name.lowercase()}")
 
@@ -444,8 +448,12 @@ class EditorViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            // Brief delay to allow LaunchedEffect to commit pending drawings
-            kotlinx.coroutines.delay(100)
+            // Allow Compose recomposition so LaunchedEffect(activeTool) fires
+            // and commits pending drawing paths via addLayer().
+            // Then join the addLayer job to wait for the DB round-trip,
+            // ensuring state.layers includes all committed paths regardless of device speed.
+            kotlinx.coroutines.delay(50)
+            addLayerJob?.join()
 
             val state = _uiState.value
             val project = state.project ?: return@launch
@@ -532,27 +540,27 @@ class EditorViewModel @Inject constructor(
         previewJob = viewModelScope.launch {
             // Brief delay so rapid changes don't all trigger heavy compositing
             kotlinx.coroutines.delay(50)
-            // Use NonCancellable so that if this job is cancelled during compositing,
-            // the bitmap from composite() is properly assigned to state (not leaked).
-            // Without this, cancelling during withContext(Default) discards the bitmap
-            // reference, leaking ~16MB per cancelled compositing operation.
-            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                // Read layers AFTER the delay to get the most up-to-date state
-                val layers = _uiState.value.layers
-                _uiState.value = _uiState.value.copy(isCompositing = true)
-                val preview = withContext(Dispatchers.Default) {
-                    try {
-                        // originalBitmap is already capped at 2048px from loadImage()
-                        ImageCompositor.composite(original, layers)
-                    } catch (_: Throwable) {
-                        null
-                    }
+
+            // Read layers AFTER the delay to get the most up-to-date state
+            val layers = _uiState.value.layers
+            _uiState.value = _uiState.value.copy(isCompositing = true)
+
+            // Compositing is cancellable — if a newer preview is requested,
+            // this work is discarded before it finishes (saves CPU/memory).
+            val preview = withContext(Dispatchers.Default) {
+                try {
+                    ImageCompositor.composite(original, layers)
+                } catch (_: Throwable) {
+                    null
                 }
+            }
+
+            // Only the state update + recycle is NonCancellable to prevent bitmap leaks.
+            // If cancelled here, the bitmap must still be assigned to state or recycled.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                 if (preview != null) {
                     val old = _uiState.value.previewBitmap
                     _uiState.value = _uiState.value.copy(previewBitmap = preview, isCompositing = false)
-                    // Recycle old preview to free memory. Use a short delay to ensure
-                    // the render thread has finished drawing the old bitmap before recycling.
                     if (old != null && old !== preview && old !== _uiState.value.originalBitmap) {
                         val toRecycle = old
                         viewModelScope.launch {
@@ -606,6 +614,7 @@ class EditorViewModel @Inject constructor(
 
     fun commitDrag() {
         // Persist the drag result to Room (undo state was already saved at gesture start)
+        if (undoRedoJob?.isActive == true) return  // IDs stale during undo/redo DB sync
         val selectedId = _uiState.value.selectedLayerId ?: return
         val layer = _uiState.value.layers.find { it.id == selectedId } ?: return
         undoSavedForDrag = false
@@ -660,6 +669,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun renameLayer(layerId: Long, newName: String) {
+        if (undoRedoJob?.isActive == true) return  // IDs stale during undo/redo DB sync
         val layer = _uiState.value.layers.find { it.id == layerId } ?: return
         val updatedLayer = layer.copy(name = newName, updatedAt = System.currentTimeMillis())
         val updatedLayers = _uiState.value.layers.map { if (it.id == layerId) updatedLayer else it }
@@ -672,6 +682,7 @@ class EditorViewModel @Inject constructor(
     // -- Layer reordering --
 
     fun moveLayerUp(layerId: Long) {
+        if (undoRedoJob?.isActive == true) return  // IDs stale during undo/redo DB sync
         val layers = _uiState.value.layers.sortedBy { it.orderIndex }
         val idx = layers.indexOfFirst { it.id == layerId }
         if (idx < 0 || idx >= layers.size - 1) return // Already at top or not found
@@ -699,6 +710,7 @@ class EditorViewModel @Inject constructor(
     }
 
     fun moveLayerDown(layerId: Long) {
+        if (undoRedoJob?.isActive == true) return  // IDs stale during undo/redo DB sync
         val layers = _uiState.value.layers.sortedBy { it.orderIndex }
         val idx = layers.indexOfFirst { it.id == layerId }
         if (idx <= 0) return // Already at bottom or not found
