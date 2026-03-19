@@ -1,21 +1,19 @@
 package com.swappergallery.ui.editor.tools
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.swappergallery.data.model.LayerData
 import com.swappergallery.ui.editor.components.ColorPicker
 import com.swappergallery.ui.editor.components.SliderControl
 
@@ -23,7 +21,8 @@ data class DrawToolState(
     val color: Long = 0xFFFF0000,
     val strokeWidth: Float = 8f,
     val opacity: Float = 1f,
-    val isEraser: Boolean = false
+    val isEraser: Boolean = false,
+    val shapeType: LayerData.ShapeType = LayerData.ShapeType.FREEHAND
 )
 
 @Composable
@@ -38,20 +37,56 @@ fun DrawToolPanel(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Shape type selection
+        Text("Shape", color = Color.White.copy(alpha = 0.7f))
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             FilterChip(
-                selected = !drawState.isEraser,
-                onClick = { onStateChange(drawState.copy(isEraser = false)) },
-                label = { Text("Brush") }
+                selected = drawState.shapeType == LayerData.ShapeType.FREEHAND,
+                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.FREEHAND)) },
+                label = { Text("Free") }
             )
             FilterChip(
-                selected = drawState.isEraser,
-                onClick = { onStateChange(drawState.copy(isEraser = true)) },
-                label = { Text("Eraser") }
+                selected = drawState.shapeType == LayerData.ShapeType.LINE,
+                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.LINE, isEraser = false)) },
+                label = { Text("Line") }
+            )
+            FilterChip(
+                selected = drawState.shapeType == LayerData.ShapeType.ARROW,
+                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.ARROW, isEraser = false)) },
+                label = { Text("Arrow") }
+            )
+            FilterChip(
+                selected = drawState.shapeType == LayerData.ShapeType.RECTANGLE,
+                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.RECTANGLE, isEraser = false)) },
+                label = { Text("Rect") }
+            )
+            FilterChip(
+                selected = drawState.shapeType == LayerData.ShapeType.CIRCLE,
+                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.CIRCLE, isEraser = false)) },
+                label = { Text("Circle") }
             )
         }
 
-        if (!drawState.isEraser) {
+        // Brush/Eraser toggle (only for freehand)
+        if (drawState.shapeType == LayerData.ShapeType.FREEHAND) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !drawState.isEraser,
+                    onClick = { onStateChange(drawState.copy(isEraser = false)) },
+                    label = { Text("Brush") }
+                )
+                FilterChip(
+                    selected = drawState.isEraser,
+                    onClick = { onStateChange(drawState.copy(isEraser = true)) },
+                    label = { Text("Eraser") }
+                )
+            }
+        }
+
+        if (!(drawState.shapeType == LayerData.ShapeType.FREEHAND && drawState.isEraser)) {
             Text("Color", color = Color.White.copy(alpha = 0.7f))
             ColorPicker(
                 selectedColor = drawState.color,

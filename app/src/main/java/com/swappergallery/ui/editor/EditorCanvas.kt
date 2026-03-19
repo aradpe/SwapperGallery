@@ -20,17 +20,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.swappergallery.data.model.LayerData
 import com.swappergallery.ui.editor.tools.DrawToolState
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 data class DrawingPoint(val x: Float, val y: Float)
 
@@ -40,6 +46,7 @@ fun EditorCanvas(
     activeTool: EditorTool,
     drawState: DrawToolState,
     hasSelectedLayer: Boolean,
+    cropData: LayerData.CropData? = null,
     onDrawingComplete: (List<LayerData.DrawPath>) -> Unit,
     onLayerTransform: (panX: Float, panY: Float, zoomDelta: Float, rotationDelta: Float) -> Unit,
     onLayerDragEnd: () -> Unit,
@@ -74,7 +81,17 @@ fun EditorCanvas(
                 },
                 onDrag = { change, _ ->
                     change.consume()
-                    currentPath.add(DrawingPoint(toImageX(change.position.x), toImageY(change.position.y)))
+                    val newPoint = DrawingPoint(toImageX(change.position.x), toImageY(change.position.y))
+                    if (drawState.shapeType == LayerData.ShapeType.FREEHAND) {
+                        currentPath.add(newPoint)
+                    } else {
+                        // For shapes, keep only start and current end point
+                        if (currentPath.size >= 2) {
+                            currentPath[1] = newPoint
+                        } else {
+                            currentPath.add(newPoint)
+                        }
+                    }
                 },
                 onDragEnd = {
                     if (currentPath.size >= 2) {
@@ -84,7 +101,8 @@ fun EditorCanvas(
                                 color = drawState.color,
                                 strokeWidth = drawState.strokeWidth,
                                 alpha = drawState.opacity,
-                                isEraser = drawState.isEraser
+                                isEraser = drawState.isEraser,
+                                shapeType = drawState.shapeType
                             )
                         )
                     }
@@ -195,12 +213,29 @@ fun EditorCanvas(
             )
         }
 
+        // Draw crop overlay when crop tool is active
+        if (activeTool == EditorTool.CROP && cropData != null) {
+            drawCropOverlay(cropData, imgX, imgY, imgW, imgH)
+        }
+
         // Scale stroke width to match ImageCompositor output (which uses minOf(w,h)/500)
         val strokeScale = (minOf(imgW, imgH) / 500f).coerceAtLeast(1f)
 
-        // Draw in-progress paths (positioned relative to image area)
+        // Draw completed paths (positioned relative to image area)
         for (pathWithStyle in completedPaths) {
             if (pathWithStyle.points.size < 2) continue
+
+            if (pathWithStyle.shapeType != LayerData.ShapeType.FREEHAND) {
+                val shapeColor = Color(pathWithStyle.color.toInt()).copy(alpha = pathWithStyle.alpha)
+                drawShapeOnCanvas(
+                    pathWithStyle.points.first(), pathWithStyle.points.last(),
+                    pathWithStyle.shapeType, shapeColor,
+                    pathWithStyle.strokeWidth * strokeScale,
+                    imgX, imgY, imgW, imgH
+                )
+                continue
+            }
+
             val path = Path()
             val first = pathWithStyle.points.first()
             path.moveTo(imgX + first.x * imgW, imgY + first.y * imgH)
@@ -224,29 +259,39 @@ fun EditorCanvas(
             )
         }
 
-        // Draw current path being drawn
+        // Draw current path/shape being drawn
         if (currentPath.size >= 2) {
-            val path = Path()
-            val first = currentPath.first()
-            path.moveTo(imgX + first.x * imgW, imgY + first.y * imgH)
-            for (i in 1 until currentPath.size) {
-                val pt = currentPath[i]
-                path.lineTo(imgX + pt.x * imgW, imgY + pt.y * imgH)
-            }
             val currentColor = if (drawState.isEraser) {
                 Color.White.copy(alpha = 0.5f)
             } else {
                 Color(drawState.color.toInt()).copy(alpha = drawState.opacity)
             }
-            drawPath(
-                path = path,
-                color = currentColor,
-                style = Stroke(
-                    width = drawState.strokeWidth * strokeScale,
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
+            val sw = drawState.strokeWidth * strokeScale
+
+            if (drawState.shapeType != LayerData.ShapeType.FREEHAND) {
+                drawShapeOnCanvas(
+                    currentPath.first(), currentPath.last(),
+                    drawState.shapeType, currentColor, sw,
+                    imgX, imgY, imgW, imgH
                 )
-            )
+            } else {
+                val path = Path()
+                val first = currentPath.first()
+                path.moveTo(imgX + first.x * imgW, imgY + first.y * imgH)
+                for (i in 1 until currentPath.size) {
+                    val pt = currentPath[i]
+                    path.lineTo(imgX + pt.x * imgW, imgY + pt.y * imgH)
+                }
+                drawPath(
+                    path = path,
+                    color = currentColor,
+                    style = Stroke(
+                        width = sw,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
+                )
+            }
         }
     }
 
@@ -259,7 +304,8 @@ fun EditorCanvas(
                     color = pathWithStyle.color,
                     strokeWidth = pathWithStyle.strokeWidth,
                     alpha = pathWithStyle.alpha,
-                    isEraser = pathWithStyle.isEraser
+                    isEraser = pathWithStyle.isEraser,
+                    shapeType = pathWithStyle.shapeType
                 )
             }
             onDrawingComplete(paths)
@@ -268,10 +314,120 @@ fun EditorCanvas(
     }
 }
 
+/** Draw a shape (line, arrow, rect, circle) on the Compose canvas. */
+private fun DrawScope.drawShapeOnCanvas(
+    start: DrawingPoint,
+    end: DrawingPoint,
+    shapeType: LayerData.ShapeType,
+    color: Color,
+    strokeWidth: Float,
+    imgX: Float, imgY: Float, imgW: Float, imgH: Float
+) {
+    val x1 = imgX + start.x * imgW
+    val y1 = imgY + start.y * imgH
+    val x2 = imgX + end.x * imgW
+    val y2 = imgY + end.y * imgH
+    val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+    when (shapeType) {
+        LayerData.ShapeType.LINE -> {
+            drawLine(color, Offset(x1, y1), Offset(x2, y2), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        }
+        LayerData.ShapeType.ARROW -> {
+            drawLine(color, Offset(x1, y1), Offset(x2, y2), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+            val angle = atan2(y2 - y1, x2 - x1)
+            val headLen = strokeWidth * 4f
+            val headAngle = 0.45f
+            drawLine(color, Offset(x2, y2),
+                Offset(x2 - headLen * cos(angle - headAngle), y2 - headLen * sin(angle - headAngle)),
+                strokeWidth = strokeWidth, cap = StrokeCap.Round)
+            drawLine(color, Offset(x2, y2),
+                Offset(x2 - headLen * cos(angle + headAngle), y2 - headLen * sin(angle + headAngle)),
+                strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        }
+        LayerData.ShapeType.RECTANGLE -> {
+            drawRect(color,
+                topLeft = Offset(minOf(x1, x2), minOf(y1, y2)),
+                size = Size(abs(x2 - x1), abs(y2 - y1)),
+                style = stroke)
+        }
+        LayerData.ShapeType.CIRCLE -> {
+            drawOval(color,
+                topLeft = Offset(minOf(x1, x2), minOf(y1, y2)),
+                size = Size(abs(x2 - x1), abs(y2 - y1)),
+                style = stroke)
+        }
+        else -> {}
+    }
+}
+
+/** Draw crop overlay: darken areas outside crop, show grid and corner handles. */
+private fun DrawScope.drawCropOverlay(
+    crop: LayerData.CropData,
+    imgX: Float, imgY: Float, imgW: Float, imgH: Float
+) {
+    val cropLeft = imgX + crop.left * imgW
+    val cropTop = imgY + crop.top * imgH
+    val cropRight = imgX + crop.right * imgW
+    val cropBottom = imgY + crop.bottom * imgH
+    val overlayColor = Color.Black.copy(alpha = 0.5f)
+
+    // Darken areas outside crop region
+    // Top
+    drawRect(overlayColor, topLeft = Offset(imgX, imgY),
+        size = Size(imgW, cropTop - imgY))
+    // Bottom
+    drawRect(overlayColor, topLeft = Offset(imgX, cropBottom),
+        size = Size(imgW, imgY + imgH - cropBottom))
+    // Left (between top and bottom overlays)
+    drawRect(overlayColor, topLeft = Offset(imgX, cropTop),
+        size = Size(cropLeft - imgX, cropBottom - cropTop))
+    // Right
+    drawRect(overlayColor, topLeft = Offset(cropRight, cropTop),
+        size = Size(imgX + imgW - cropRight, cropBottom - cropTop))
+
+    // Crop border
+    val borderColor = Color.White
+    drawRect(borderColor,
+        topLeft = Offset(cropLeft, cropTop),
+        size = Size(cropRight - cropLeft, cropBottom - cropTop),
+        style = Stroke(width = 2f))
+
+    // Rule of thirds grid
+    val gridColor = Color.White.copy(alpha = 0.3f)
+    val thirdW = (cropRight - cropLeft) / 3f
+    val thirdH = (cropBottom - cropTop) / 3f
+    for (i in 1..2) {
+        drawLine(gridColor, Offset(cropLeft + thirdW * i, cropTop),
+            Offset(cropLeft + thirdW * i, cropBottom), strokeWidth = 1f)
+        drawLine(gridColor, Offset(cropLeft, cropTop + thirdH * i),
+            Offset(cropRight, cropTop + thirdH * i), strokeWidth = 1f)
+    }
+
+    // Corner handles
+    val handleLen = 20f
+    val handleWidth = 4f
+    val corners = listOf(
+        Offset(cropLeft, cropTop),
+        Offset(cropRight, cropTop),
+        Offset(cropLeft, cropBottom),
+        Offset(cropRight, cropBottom)
+    )
+    for (corner in corners) {
+        val dx = if (corner.x == cropLeft) 1f else -1f
+        val dy = if (corner.y == cropTop) 1f else -1f
+        drawLine(borderColor, corner,
+            Offset(corner.x + handleLen * dx, corner.y), strokeWidth = handleWidth)
+        drawLine(borderColor, corner,
+            Offset(corner.x, corner.y + handleLen * dy), strokeWidth = handleWidth)
+    }
+}
+
 private data class DrawPathWithStyle(
     val points: List<DrawingPoint>,
     val color: Long,
     val strokeWidth: Float,
     val alpha: Float,
-    val isEraser: Boolean
+    val isEraser: Boolean,
+    val shapeType: LayerData.ShapeType = LayerData.ShapeType.FREEHAND
 )

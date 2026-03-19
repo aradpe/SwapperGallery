@@ -37,7 +37,8 @@ sealed class LayerData {
         val color: Long = 0xFFFF0000,
         val strokeWidth: Float = 8f,
         val alpha: Float = 1f,
-        val isEraser: Boolean = false
+        val isEraser: Boolean = false,
+        val shapeType: ShapeType = ShapeType.FREEHAND
     )
 
     @Serializable
@@ -102,5 +103,14 @@ sealed class LayerData {
         FULL,
         RADIAL,
         LINEAR
+    }
+
+    @Serializable
+    enum class ShapeType {
+        FREEHAND,
+        LINE,
+        ARROW,
+        RECTANGLE,
+        CIRCLE
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -219,6 +220,7 @@ fun EditorScreen(
                 .fillMaxSize()
                 .background(EditorBackground)
                 .padding(padding)
+                .imePadding()
         ) {
             // Layer panel (collapsible)
             AnimatedVisibility(
@@ -251,6 +253,9 @@ fun EditorScreen(
                     activeTool = uiState.activeTool,
                     drawState = drawState,
                     hasSelectedLayer = uiState.selectedLayerId != null,
+                    cropData = if (uiState.activeTool == EditorTool.CROP)
+                        uiState.selectedLayerId?.let { viewModel.getLayerData(it) } as? LayerData.CropData
+                    else null,
                     onDrawingComplete = { paths ->
                         if (paths.isNotEmpty()) {
                             viewModel.addLayer(

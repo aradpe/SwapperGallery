@@ -508,6 +508,12 @@ object ImageCompositor {
                 }
             }
 
+            // Shapes: render using start/end points
+            if (drawPath.shapeType != LayerData.ShapeType.FREEHAND) {
+                drawShape(drawCanvas, width, height, drawPath, paint)
+                continue
+            }
+
             val path = Path()
             val first = drawPath.points.first()
             path.moveTo(first.x * width, first.y * height)
@@ -522,6 +528,49 @@ object ImageCompositor {
 
         canvas.drawBitmap(drawBitmap, 0f, 0f, null)
         drawBitmap.recycle()
+    }
+
+    private fun drawShape(
+        canvas: Canvas, width: Int, height: Int,
+        drawPath: LayerData.DrawPath, paint: Paint
+    ) {
+        val start = drawPath.points.first()
+        val end = drawPath.points.last()
+        val x1 = start.x * width
+        val y1 = start.y * height
+        val x2 = end.x * width
+        val y2 = end.y * height
+
+        when (drawPath.shapeType) {
+            LayerData.ShapeType.LINE -> {
+                canvas.drawLine(x1, y1, x2, y2, paint)
+            }
+            LayerData.ShapeType.ARROW -> {
+                canvas.drawLine(x1, y1, x2, y2, paint)
+                val angle = kotlin.math.atan2((y2 - y1).toDouble(), (x2 - x1).toDouble()).toFloat()
+                val headLen = paint.strokeWidth * 4f
+                val headAngle = 0.45f
+                canvas.drawLine(x2, y2,
+                    x2 - headLen * kotlin.math.cos(angle - headAngle),
+                    y2 - headLen * kotlin.math.sin(angle - headAngle), paint)
+                canvas.drawLine(x2, y2,
+                    x2 - headLen * kotlin.math.cos(angle + headAngle),
+                    y2 - headLen * kotlin.math.sin(angle + headAngle), paint)
+            }
+            LayerData.ShapeType.RECTANGLE -> {
+                canvas.drawRect(
+                    minOf(x1, x2), minOf(y1, y2),
+                    maxOf(x1, x2), maxOf(y1, y2), paint
+                )
+            }
+            LayerData.ShapeType.CIRCLE -> {
+                canvas.drawOval(
+                    RectF(minOf(x1, x2), minOf(y1, y2), maxOf(x1, x2), maxOf(y1, y2)),
+                    paint
+                )
+            }
+            else -> {}
+        }
     }
 
     private fun drawText(canvas: Canvas, width: Int, height: Int, text: LayerData.TextData) {
