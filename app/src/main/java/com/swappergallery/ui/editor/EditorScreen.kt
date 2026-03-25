@@ -306,7 +306,7 @@ fun EditorScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 350.dp)
+                        .heightIn(max = 200.dp)
                         .background(EditorBackground)
                 ) {
                     // Done header
