@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -67,6 +68,23 @@ fun EditorCanvas(
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+
+    // Local crop state for smooth dragging (committed on drag end)
+    var localCropLeft by remember { mutableFloatStateOf(0f) }
+    var localCropTop by remember { mutableFloatStateOf(0f) }
+    var localCropRight by remember { mutableFloatStateOf(1f) }
+    var localCropBottom by remember { mutableFloatStateOf(1f) }
+    var isCropDragging by remember { mutableStateOf(false) }
+
+    // Sync local crop from external cropData when not dragging
+    LaunchedEffect(cropData) {
+        if (!isCropDragging && cropData != null) {
+            localCropLeft = cropData.left
+            localCropTop = cropData.top
+            localCropRight = cropData.right
+            localCropBottom = cropData.bottom
+        }
+    }
 
     // Convert canvas pixel to normalized image coordinate (0-1)
     fun toImageX(px: Float) = ((px - imgX) / imgW).coerceIn(0f, 1f)
@@ -162,36 +180,31 @@ fun EditorCanvas(
             }
         EditorTool.CROP -> Modifier.pointerInput(cropData) {
             if (cropData == null || onCropChange == null) return@pointerInput
-            val handleRadius = 40f // touch target radius in pixels
+            val handleRadius = 40f
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = true)
                 down.consume()
                 val px = down.position.x
                 val py = down.position.y
 
-                // Determine which edge/corner/body to drag
-                val cropLeft = imgX + cropData.left * imgW
-                val cropTop = imgY + cropData.top * imgH
-                val cropRight = imgX + cropData.right * imgW
-                val cropBottom = imgY + cropData.bottom * imgH
+                val cL = imgX + localCropLeft * imgW
+                val cT = imgY + localCropTop * imgH
+                val cR = imgX + localCropRight * imgW
+                val cB = imgY + localCropBottom * imgH
 
-                val nearLeft = abs(px - cropLeft) < handleRadius
-                val nearRight = abs(px - cropRight) < handleRadius
-                val nearTop = abs(py - cropTop) < handleRadius
-                val nearBottom = abs(py - cropBottom) < handleRadius
+                val nearLeft = abs(px - cL) < handleRadius
+                val nearRight = abs(px - cR) < handleRadius
+                val nearTop = abs(py - cT) < handleRadius
+                val nearBottom = abs(py - cB) < handleRadius
 
-                // Encode drag target: edges, corners, or body
                 val dragLeft = nearLeft && !nearRight
                 val dragRight = nearRight && !nearLeft
                 val dragTop = nearTop && !nearBottom
                 val dragBottom = nearBottom && !nearTop
                 val dragBody = !nearLeft && !nearRight && !nearTop && !nearBottom &&
-                    px in cropLeft..cropRight && py in cropTop..cropBottom
+                    px in cL..cR && py in cT..cB
 
-                var curLeft = cropData.left
-                var curTop = cropData.top
-                var curRight = cropData.right
-                var curBottom = cropData.bottom
+                isCropDragging = true
 
                 do {
                     val event = awaitPointerEvent()
@@ -205,24 +218,26 @@ fun EditorCanvas(
                         val prevY = toImageY(change.previousPosition.y)
                         val dx = nx - prevX
                         val dy = ny - prevY
-                        val w = curRight - curLeft
-                        val h = curBottom - curTop
-                        curLeft = (curLeft + dx).coerceIn(0f, 1f - w)
-                        curTop = (curTop + dy).coerceIn(0f, 1f - h)
-                        curRight = curLeft + w
-                        curBottom = curTop + h
+                        val w = localCropRight - localCropLeft
+                        val h = localCropBottom - localCropTop
+                        localCropLeft = (localCropLeft + dx).coerceIn(0f, 1f - w)
+                        localCropTop = (localCropTop + dy).coerceIn(0f, 1f - h)
+                        localCropRight = localCropLeft + w
+                        localCropBottom = localCropTop + h
                     } else {
-                        if (dragLeft) curLeft = nx.coerceIn(0f, curRight - 0.05f)
-                        if (dragRight) curRight = nx.coerceIn(curLeft + 0.05f, 1f)
-                        if (dragTop) curTop = ny.coerceIn(0f, curBottom - 0.05f)
-                        if (dragBottom) curBottom = ny.coerceIn(curTop + 0.05f, 1f)
+                        if (dragLeft) localCropLeft = nx.coerceIn(0f, localCropRight - 0.05f)
+                        if (dragRight) localCropRight = nx.coerceIn(localCropLeft + 0.05f, 1f)
+                        if (dragTop) localCropTop = ny.coerceIn(0f, localCropBottom - 0.05f)
+                        if (dragBottom) localCropBottom = ny.coerceIn(localCropTop + 0.05f, 1f)
                     }
-
-                    onCropChange(cropData.copy(
-                        left = curLeft, top = curTop,
-                        right = curRight, bottom = curBottom
-                    ))
                 } while (event.changes.any { it.pressed })
+
+                // Commit only on drag end
+                isCropDragging = false
+                onCropChange(cropData.copy(
+                    left = localCropLeft, top = localCropTop,
+                    right = localCropRight, bottom = localCropBottom
+                ))
             }
         }
         else -> Modifier.pointerInput(Unit) {
@@ -279,9 +294,16 @@ fun EditorCanvas(
             )
         }
 
-        // Draw crop overlay when crop tool is active
+        // Draw crop overlay when crop tool is active (uses local state for smooth dragging)
         if (activeTool == EditorTool.CROP && cropData != null) {
-            drawCropOverlay(cropData, imgX, imgY, imgW, imgH)
+            drawCropOverlay(
+                LayerData.CropData(
+                    left = localCropLeft, top = localCropTop,
+                    right = localCropRight, bottom = localCropBottom,
+                    rotation = cropData.rotation
+                ),
+                imgX, imgY, imgW, imgH
+            )
         }
 
         // Scale stroke width to match ImageCompositor output (which uses minOf(w,h)/500)

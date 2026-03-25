@@ -1,28 +1,29 @@
 package com.swappergallery.ui.editor.components
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BlurOn
-import androidx.compose.material.icons.filled.Brush
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.EmojiEmotions
-import androidx.compose.material.icons.filled.FilterVintage
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.BlurOn
+import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.Crop
+import androidx.compose.material.icons.outlined.EmojiEmotions
+import androidx.compose.material.icons.outlined.FilterVintage
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -40,48 +41,47 @@ fun EditorToolBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         ToolButton(
-            icon = Icons.Default.TextFields,
-            label = "Text",
-            isSelected = activeTool == EditorTool.TEXT,
-            onClick = { onToolSelected(EditorTool.TEXT) }
-        )
-        ToolButton(
-            icon = Icons.Default.Brush,
-            label = "Draw",
-            isSelected = activeTool == EditorTool.DRAW,
-            onClick = { onToolSelected(EditorTool.DRAW) }
-        )
-        ToolButton(
-            icon = Icons.Default.ContentCut,
+            icon = Icons.Outlined.Crop,
             label = "Crop",
             isSelected = activeTool == EditorTool.CROP,
             onClick = { onToolSelected(EditorTool.CROP) }
         )
         ToolButton(
-            icon = Icons.Default.FilterVintage,
+            icon = Icons.Outlined.FilterVintage,
             label = "Filter",
             isSelected = activeTool == EditorTool.FILTER,
             onClick = { onToolSelected(EditorTool.FILTER) }
         )
         ToolButton(
-            icon = Icons.Default.Tune,
+            icon = Icons.Outlined.Tune,
             label = "Adjust",
             isSelected = activeTool == EditorTool.ADJUST,
             onClick = { onToolSelected(EditorTool.ADJUST) }
         )
         ToolButton(
-            icon = Icons.Default.EmojiEmotions,
+            icon = Icons.Outlined.EmojiEmotions,
             label = "Sticker",
             isSelected = activeTool == EditorTool.STICKER,
             onClick = { onToolSelected(EditorTool.STICKER) }
         )
         ToolButton(
-            icon = Icons.Default.BlurOn,
+            icon = Icons.Outlined.Brush,
+            label = "Draw",
+            isSelected = activeTool == EditorTool.DRAW,
+            onClick = { onToolSelected(EditorTool.DRAW) }
+        )
+        ToolButton(
+            icon = Icons.Outlined.TextFields,
+            label = "Text",
+            isSelected = activeTool == EditorTool.TEXT,
+            onClick = { onToolSelected(EditorTool.TEXT) }
+        )
+        ToolButton(
+            icon = Icons.Outlined.BlurOn,
             label = "Blur",
             isSelected = activeTool == EditorTool.BLUR,
             onClick = { onToolSelected(EditorTool.BLUR) }
@@ -100,19 +100,31 @@ private fun ToolButton(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(horizontal = 8.dp)
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
-        IconButton(onClick = onClick) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .then(
+                    if (isSelected) Modifier.background(Color.White.copy(alpha = 0.12f))
+                    else Modifier
+                )
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
                 tint = tint,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
         Text(
             text = label,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             color = tint
         )
     }
