@@ -1,17 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple camera/edit icon for app launcher -->
+
+    <!-- Camera body -->
+    <path android:pathData="M26,38 L44,38 L48,32 L62,32 L66,38 L82,38 C84.2,38 86,39.8 86,42 L86,74 C86,76.2 84.2,78 82,78 L26,78 C23.8,78 22,76.2 22,74 L22,42 C22,39.8 23.8,38 26,38 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="22"
+                android:startY="38"
+                android:endX="86"
+                android:endY="78">
+                <item android:offset="0" android:color="#FFFF6B9D" />
+                <item android:offset="0.25" android:color="#FFFF8A50" />
+                <item android:offset="0.5" android:color="#FF4CAF50" />
+                <item android:offset="0.75" android:color="#FF2196F3" />
+                <item android:offset="1" android:color="#FF7C4DFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Flash bump -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,30 C40.745,30 30,40.745 30,54 C30,67.255 40.745,78 54,78 C67.255,78 78,67.255 78,54 C78,40.745 67.255,30 54,30Z M54,72 C44.059,72 36,63.941 36,54 C36,44.059 44.059,36 54,36 C63.941,36 72,44.059 72,54 C72,63.941 63.941,72 54,72Z" />
+        android:pathData="M30,40 L34,40 L34,42 L30,42 Z"
+        android:fillColor="#FFFFFFFF"
+        android:alpha="0.5" />
+
+    <!-- Lens outer ring -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,42 C47.373,42 42,47.373 42,54 C42,60.627 47.373,66 54,66 C60.627,66 66,60.627 66,54 C66,47.373 60.627,42 54,42Z" />
+        android:pathData="M54,45 C61.18,45 67,50.82 67,58 C67,65.18 61.18,71 54,71 C46.82,71 41,65.18 41,58 C41,50.82 46.82,45 54,45 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Lens inner ring -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M68,34 L72,34 L72,38 L74,38 L74,34 L78,34 L78,32 L74,32 L74,28 L72,28 L72,32 L68,32 Z" />
+        android:pathData="M54,47 C60.075,47 65,51.925 65,58 C65,64.075 60.075,69 54,69 C47.925,69 43,64.075 43,58 C43,51.925 47.925,47 54,47 Z"
+        android:fillColor="#FF1A237E" />
+
+    <!-- Sky in lens -->
+    <path
+        android:pathData="M54,47 C60.075,47 65,51.925 65,58 L65,58 L43,58 C43,51.925 47.925,47 54,47 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="43"
+                android:startY="47"
+                android:endX="65"
+                android:endY="58">
+                <item android:offset="0" android:color="#FF1565C0" />
+                <item android:offset="1" android:color="#FF42A5F5" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Sun -->
+    <path
+        android:pathData="M58,52 C59.657,52 61,53.343 61,55 C61,56.657 59.657,58 58,58 C56.343,58 55,56.657 55,55 C55,53.343 56.343,52 58,52 Z"
+        android:fillColor="#FFFFC107" />
+
+    <!-- Mountain large -->
+    <path
+        android:pathData="M43,69 L50,58 L54,62 L60,55 L65,69 Z"
+        android:fillColor="#FF00897B" />
+
+    <!-- Mountain small -->
+    <path
+        android:pathData="M43,69 L49,61 L55,69 Z"
+        android:fillColor="#FF26A69A" />
+
+    <!-- Water/reflection -->
+    <path
+        android:pathData="M54,69 C60.075,69 65,64.075 65,58 L65,64 C65,64 62,69 54,69 C47.925,69 43,64.075 43,58 L43,64 C43,64 46,69 54,69 Z"
+        android:fillColor="#FF0D47A1"
+        android:alpha="0.3" />
+
+    <!-- Top-right decorative dot -->
+    <path
+        android:pathData="M76,44 C77.1,44 78,44.9 78,46 C78,47.1 77.1,48 76,48 C74.9,48 74,47.1 74,46 C74,44.9 74.9,44 76,44 Z"
+        android:fillColor="#FFFFFFFF"
+        android:alpha="0.5" />
+
 </vector>
