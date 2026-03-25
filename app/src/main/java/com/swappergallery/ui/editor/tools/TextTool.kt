@@ -149,5 +149,8 @@ fun TextToolPanel(
             valueRange = 0f..20f
         )
 
+        Text("Outline Color", color = Color.White.copy(alpha = 0.7f))
+        ColorPicker(selectedColor = outlineColor, onColorSelected = { outlineColor = it; onChanged() })
+
     }
 }

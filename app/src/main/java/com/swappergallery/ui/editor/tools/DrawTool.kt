@@ -1,18 +1,23 @@
 package com.swappergallery.ui.editor.tools
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.swappergallery.data.model.LayerData
 import com.swappergallery.ui.editor.components.ColorPicker
 import com.swappergallery.ui.editor.components.SliderControl
@@ -38,51 +43,39 @@ fun DrawToolPanel(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Shape type selection
-        Text("Shape", color = Color.White.copy(alpha = 0.7f))
         Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            FilterChip(
-                selected = drawState.shapeType == LayerData.ShapeType.FREEHAND,
-                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.FREEHAND)) },
-                label = { Text("Free") }
-            )
-            FilterChip(
-                selected = drawState.shapeType == LayerData.ShapeType.LINE,
-                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.LINE, isEraser = false)) },
-                label = { Text("Line") }
-            )
-            FilterChip(
-                selected = drawState.shapeType == LayerData.ShapeType.ARROW,
-                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.ARROW, isEraser = false)) },
-                label = { Text("Arrow") }
-            )
-            FilterChip(
-                selected = drawState.shapeType == LayerData.ShapeType.RECTANGLE,
-                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.RECTANGLE, isEraser = false)) },
-                label = { Text("Rect") }
-            )
-            FilterChip(
-                selected = drawState.shapeType == LayerData.ShapeType.CIRCLE,
-                onClick = { onStateChange(drawState.copy(shapeType = LayerData.ShapeType.CIRCLE, isEraser = false)) },
-                label = { Text("Circle") }
-            )
+            ShapeIcon("✏️", drawState.shapeType == LayerData.ShapeType.FREEHAND) {
+                onStateChange(drawState.copy(shapeType = LayerData.ShapeType.FREEHAND))
+            }
+            ShapeIcon("╱", drawState.shapeType == LayerData.ShapeType.LINE) {
+                onStateChange(drawState.copy(shapeType = LayerData.ShapeType.LINE, isEraser = false))
+            }
+            ShapeIcon("↗", drawState.shapeType == LayerData.ShapeType.ARROW) {
+                onStateChange(drawState.copy(shapeType = LayerData.ShapeType.ARROW, isEraser = false))
+            }
+            ShapeIcon("▢", drawState.shapeType == LayerData.ShapeType.RECTANGLE) {
+                onStateChange(drawState.copy(shapeType = LayerData.ShapeType.RECTANGLE, isEraser = false))
+            }
+            ShapeIcon("○", drawState.shapeType == LayerData.ShapeType.CIRCLE) {
+                onStateChange(drawState.copy(shapeType = LayerData.ShapeType.CIRCLE, isEraser = false))
+            }
         }
 
         // Brush/Eraser toggle (only for freehand)
         if (drawState.shapeType == LayerData.ShapeType.FREEHAND) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !drawState.isEraser,
-                    onClick = { onStateChange(drawState.copy(isEraser = false)) },
-                    label = { Text("Brush") }
-                )
-                FilterChip(
-                    selected = drawState.isEraser,
-                    onClick = { onStateChange(drawState.copy(isEraser = true)) },
-                    label = { Text("Eraser") }
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                ShapeIcon("🖌️", !drawState.isEraser) {
+                    onStateChange(drawState.copy(isEraser = false))
+                }
+                ShapeIcon("🧹", drawState.isEraser) {
+                    onStateChange(drawState.copy(isEraser = true))
+                }
             }
         }
 
@@ -106,6 +99,24 @@ fun DrawToolPanel(
             value = drawState.opacity * 100f,
             onValueChange = { onStateChange(drawState.copy(opacity = it / 100f)) },
             valueRange = 10f..100f
+        )
+    }
+}
+
+@Composable
+private fun ShapeIcon(emoji: String, isSelected: Boolean, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(if (isSelected) Color.White.copy(alpha = 0.2f) else Color.Transparent)
+            .clickable(onClick = onClick)
+    ) {
+        Text(
+            text = emoji,
+            fontSize = 18.sp,
+            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.5f)
         )
     }
 }

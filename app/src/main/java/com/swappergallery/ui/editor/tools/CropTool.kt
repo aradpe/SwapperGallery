@@ -109,30 +109,5 @@ fun CropToolPanel(
             valueRange = 0f..360f
         )
 
-        SliderControl(
-            label = "Left",
-            value = left * 100f,
-            onValueChange = { left = (it / 100f).coerceIn(0f, right - 0.1f); onChanged() },
-            valueRange = 0f..90f
-        )
-        SliderControl(
-            label = "Top",
-            value = top * 100f,
-            onValueChange = { top = (it / 100f).coerceIn(0f, bottom - 0.1f); onChanged() },
-            valueRange = 0f..90f
-        )
-        SliderControl(
-            label = "Right",
-            value = right * 100f,
-            onValueChange = { right = (it / 100f).coerceIn(left + 0.1f, 1f); onChanged() },
-            valueRange = 10f..100f
-        )
-        SliderControl(
-            label = "Bottom",
-            value = bottom * 100f,
-            onValueChange = { bottom = (it / 100f).coerceIn(top + 0.1f, 1f); onChanged() },
-            valueRange = 10f..100f
-        )
-
     }
 }

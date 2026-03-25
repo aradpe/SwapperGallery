@@ -7,7 +7,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,6 +46,7 @@ fun EditorCanvas(
     drawState: DrawToolState,
     hasSelectedLayer: Boolean,
     cropData: LayerData.CropData? = null,
+    onCropChange: ((LayerData.CropData) -> Unit)? = null,
     onDrawingComplete: (List<LayerData.DrawPath>) -> Unit,
     onLayerTransform: (panX: Float, panY: Float, zoomDelta: Float, rotationDelta: Float) -> Unit,
     onLayerDragEnd: () -> Unit,
@@ -74,41 +74,42 @@ fun EditorCanvas(
 
     val drawModifier = when (activeTool) {
         EditorTool.DRAW -> Modifier.pointerInput(drawState) {
-            detectDragGestures(
-                onDragStart = { offset ->
-                    currentPath.clear()
-                    currentPath.add(DrawingPoint(toImageX(offset.x), toImageY(offset.y)))
-                },
-                onDrag = { change, _ ->
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = true)
+                down.consume()
+                currentPath.clear()
+                currentPath.add(DrawingPoint(toImageX(down.position.x), toImageY(down.position.y)))
+
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull() ?: break
                     change.consume()
                     val newPoint = DrawingPoint(toImageX(change.position.x), toImageY(change.position.y))
                     if (drawState.shapeType == LayerData.ShapeType.FREEHAND) {
                         currentPath.add(newPoint)
                     } else {
-                        // For shapes, keep only start and current end point
                         if (currentPath.size >= 2) {
                             currentPath[1] = newPoint
                         } else {
                             currentPath.add(newPoint)
                         }
                     }
-                },
-                onDragEnd = {
-                    if (currentPath.size >= 2) {
-                        completedPaths.add(
-                            DrawPathWithStyle(
-                                points = currentPath.toList(),
-                                color = drawState.color,
-                                strokeWidth = drawState.strokeWidth,
-                                alpha = drawState.opacity,
-                                isEraser = drawState.isEraser,
-                                shapeType = drawState.shapeType
-                            )
+                } while (event.changes.any { it.pressed })
+
+                if (currentPath.size >= 2) {
+                    completedPaths.add(
+                        DrawPathWithStyle(
+                            points = currentPath.toList(),
+                            color = drawState.color,
+                            strokeWidth = drawState.strokeWidth,
+                            alpha = drawState.opacity,
+                            isEraser = drawState.isEraser,
+                            shapeType = drawState.shapeType
                         )
-                    }
-                    currentPath.clear()
+                    )
                 }
-            )
+                currentPath.clear()
+            }
         }
         // Text & Sticker: drag to move, pinch to resize/rotate, tap to select/place
         EditorTool.TEXT, EditorTool.STICKER -> Modifier
@@ -159,6 +160,71 @@ fun EditorCanvas(
                     onLayerTap(toImageX(offset.x), toImageY(offset.y))
                 }
             }
+        EditorTool.CROP -> Modifier.pointerInput(cropData) {
+            if (cropData == null || onCropChange == null) return@pointerInput
+            val handleRadius = 40f // touch target radius in pixels
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = true)
+                down.consume()
+                val px = down.position.x
+                val py = down.position.y
+
+                // Determine which edge/corner/body to drag
+                val cropLeft = imgX + cropData.left * imgW
+                val cropTop = imgY + cropData.top * imgH
+                val cropRight = imgX + cropData.right * imgW
+                val cropBottom = imgY + cropData.bottom * imgH
+
+                val nearLeft = abs(px - cropLeft) < handleRadius
+                val nearRight = abs(px - cropRight) < handleRadius
+                val nearTop = abs(py - cropTop) < handleRadius
+                val nearBottom = abs(py - cropBottom) < handleRadius
+
+                // Encode drag target: edges, corners, or body
+                val dragLeft = nearLeft && !nearRight
+                val dragRight = nearRight && !nearLeft
+                val dragTop = nearTop && !nearBottom
+                val dragBottom = nearBottom && !nearTop
+                val dragBody = !nearLeft && !nearRight && !nearTop && !nearBottom &&
+                    px in cropLeft..cropRight && py in cropTop..cropBottom
+
+                var curLeft = cropData.left
+                var curTop = cropData.top
+                var curRight = cropData.right
+                var curBottom = cropData.bottom
+
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull() ?: break
+                    change.consume()
+                    val nx = toImageX(change.position.x)
+                    val ny = toImageY(change.position.y)
+
+                    if (dragBody) {
+                        val prevX = toImageX(change.previousPosition.x)
+                        val prevY = toImageY(change.previousPosition.y)
+                        val dx = nx - prevX
+                        val dy = ny - prevY
+                        val w = curRight - curLeft
+                        val h = curBottom - curTop
+                        curLeft = (curLeft + dx).coerceIn(0f, 1f - w)
+                        curTop = (curTop + dy).coerceIn(0f, 1f - h)
+                        curRight = curLeft + w
+                        curBottom = curTop + h
+                    } else {
+                        if (dragLeft) curLeft = nx.coerceIn(0f, curRight - 0.05f)
+                        if (dragRight) curRight = nx.coerceIn(curLeft + 0.05f, 1f)
+                        if (dragTop) curTop = ny.coerceIn(0f, curBottom - 0.05f)
+                        if (dragBottom) curBottom = ny.coerceIn(curTop + 0.05f, 1f)
+                    }
+
+                    onCropChange(cropData.copy(
+                        left = curLeft, top = curTop,
+                        right = curRight, bottom = curBottom
+                    ))
+                } while (event.changes.any { it.pressed })
+            }
+        }
         else -> Modifier.pointerInput(Unit) {
             detectTapGestures { offset ->
                 onLayerTap(toImageX(offset.x), toImageY(offset.y))

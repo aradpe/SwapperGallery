@@ -256,6 +256,9 @@ fun EditorScreen(
                     cropData = if (uiState.activeTool == EditorTool.CROP)
                         uiState.selectedLayerId?.let { viewModel.getLayerData(it) } as? LayerData.CropData
                     else null,
+                    onCropChange = { newCrop ->
+                        uiState.selectedLayerId?.let { viewModel.updateLayerData(it, newCrop) }
+                    },
                     onDrawingComplete = { paths ->
                         if (paths.isNotEmpty()) {
                             viewModel.addLayer(
