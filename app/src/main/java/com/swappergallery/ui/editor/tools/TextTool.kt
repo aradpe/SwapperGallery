@@ -46,6 +46,7 @@ fun TextToolPanel(
     var rotation by remember { mutableFloatStateOf(existingData?.rotation ?: 0f) }
     var outlineWidth by remember { mutableFloatStateOf(existingData?.outlineWidth ?: 0f) }
     var outlineColor by remember { mutableStateOf(existingData?.outlineColor ?: 0xFF000000) }
+    var backgroundColor by remember { mutableStateOf(existingData?.backgroundColor ?: 0x00000000) }
 
     // Counter to debounce text input — incremented on each text change
     var textChangeCounter by remember { mutableIntStateOf(0) }
@@ -67,7 +68,7 @@ fun TextToolPanel(
         x = existingData?.x ?: 0.5f,
         y = existingData?.y ?: 0.5f,
         scale = existingData?.scale ?: 1f,
-        backgroundColor = existingData?.backgroundColor ?: 0x00000000,
+        backgroundColor = backgroundColor,
         fontFamily = existingData?.fontFamily ?: "sans-serif"
     )
 
@@ -151,6 +152,9 @@ fun TextToolPanel(
 
         Text("Outline Color", color = Color.White.copy(alpha = 0.7f))
         ColorPicker(selectedColor = outlineColor, onColorSelected = { outlineColor = it; onChanged() })
+
+        Text("Background Color", color = Color.White.copy(alpha = 0.7f))
+        ColorPicker(selectedColor = backgroundColor, onColorSelected = { backgroundColor = it; onChanged() }, showTransparent = true)
 
     }
 }

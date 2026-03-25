@@ -12,11 +12,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 val presetColors = listOf(
     0xFFFFFFFF, // White
@@ -40,7 +45,8 @@ val presetColors = listOf(
 fun ColorPicker(
     selectedColor: Long,
     onColorSelected: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showTransparent: Boolean = false
 ) {
     Row(
         modifier = modifier
@@ -49,6 +55,12 @@ fun ColorPicker(
             .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        if (showTransparent) {
+            TransparentCircle(
+                isSelected = (selectedColor.toInt() ushr 24) == 0,
+                onClick = { onColorSelected(0x00000000) }
+            )
+        }
         for (color in presetColors) {
             ColorCircle(
                 color = color,
@@ -57,6 +69,23 @@ fun ColorPicker(
             )
         }
     }
+}
+
+@Composable
+private fun TransparentCircle(isSelected: Boolean, onClick: () -> Unit) {
+    val borderMod = if (isSelected) Modifier.border(3.dp, Color.White, CircleShape)
+        else Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f), CircleShape)
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Color.DarkGray)
+            .drawBehind {
+                drawLine(Color.Red, Offset(4f, 4f), Offset(size.width - 4f, size.height - 4f), strokeWidth = 2f)
+            }
+            .then(borderMod)
+            .clickable(onClick = onClick)
+    )
 }
 
 @Composable
