@@ -96,7 +96,7 @@ fun GalleryScreen(
                         if (uiState.selectedAlbumId != null) {
                             uiState.albums.find { it.id == uiState.selectedAlbumId }?.name ?: "Album"
                         } else {
-                            "Golary"
+                            "Gallery-Goli"
                         }
                     )
                 },
